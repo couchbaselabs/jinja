@@ -3,17 +3,8 @@ import requests
 import hashlib
 import json
 from mc_bin_client import MemcachedClient as McdClient
+from constants import *
 
-JENKINS = "http://qa.sc.couchbase.com"
-OS_TYPES = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
-COMPONENTS = ["VIEW", "QUERY", "REB", "XDCR","TUQ","RZA", "FAILOVER","CLI","DCP"]
-DEFAULT_BUILD = "0.0.0-xxxx"
-EXCLUDED = []
-
-P0 = "P0"
-P1 = "P1"
-P2 = "P2"
-JOBS = {}
 HOST="127.0.0.1"
 PORT=11210
 client = McdClient(HOST, PORT)
@@ -29,6 +20,8 @@ def getAction(actions, key, value = None):
     obj = None
 
     for a in actions:
+        if a is None:
+            continue
         if key in a.keys():
             if value:
                 if a["name"] == value:
@@ -124,8 +117,9 @@ def poll():
             continue
 
         for comp in COMPONENTS:
-            if comp in doc["name"].upper():
-                doc["component"] = comp
+            tag, _c = comp.split("-")
+            if tag in doc["name"].upper():
+                doc["component"] = _c
                 break
 
         if "component" not in doc:
