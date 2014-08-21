@@ -1,3 +1,4 @@
+import time
 import requests
 import hashlib
 import json
@@ -137,4 +138,8 @@ def poll():
 
 if __name__ == "__main__":
     while True:
-        poll()
+        try:    	
+           poll()
+        except AssertionError:
+           pass # some url is unavailable
+        time.sleep(10)
