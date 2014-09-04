@@ -5,8 +5,8 @@ import json
 from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
-HOST="127.0.0.1"
-PORT=11210
+HOST = "127.0.0.1"
+PORT = 11210
 client = McdClient(HOST, PORT)
 client.sasl_auth_plain("jenkins", "")
 
@@ -37,10 +37,10 @@ def storeJob(doc):
 
     url = doc["url"]
     res = getJS(url, {"depth" : 0}).json()
+    lastBuild = None
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
-
 
         for bid in bids:
             if bid in JOBS[doc["name"]]:
@@ -75,7 +75,14 @@ def storeJob(doc):
                         doc["priority"] = P1
 
 
-                doc["build"] = doc["build"].replace("-rel","")
+                doc["build"] = doc["build"].replace("-rel","").split(",")[0]
+
+                print "%s v %s" % (doc["build"], lastBuild)
+
+                if lastBuild == doc["build"]:
+                    continue # already have results for this build
+                else:
+                    lastBuild = doc["build"]
 
                 try:
                     rel, bno = doc["build"].split("-")
@@ -89,7 +96,7 @@ def storeJob(doc):
                 val = json.dumps(doc)
                 try:
                     print val
-                    client.set(key, 0, 0, val)
+                    client.set(key, 0, 0, val, 0)
                 except:
                     print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
@@ -97,11 +104,10 @@ def poll():
 
     res = getJS(JENKINS, {"depth" : 0, "tree" : "jobs[name,url]"})
     j = res.json()
+
     for job in j["jobs"]:
         doc = {}
         doc["name"] = job["name"]
-        if job["name"] in EXCLUDED:
-           continue
 
         if job["name"] not in JOBS:
             JOBS[job["name"]] = []
@@ -109,12 +115,10 @@ def poll():
         for os in OS_TYPES:
             if os in doc["name"].upper():
                 doc["os"] = os
-                break
 
         if "os" not in doc:
             print "job name has unrecognized os: %s" %  doc["name"]
-            EXCLUDED.append(doc["name"])
-            continue
+            doc["os"] = "NA"
 
         for comp in COMPONENTS:
             tag, _c = comp.split("-")
@@ -124,16 +128,13 @@ def poll():
 
         if "component" not in doc:
             print "job name has unrecognized component: %s" %  doc["name"]
-            EXCLUDED.append(doc["name"])
-            continue
+            doc["component"] = "MISC"
 
         doc["url"] = job["url"]
-        storeJob(doc)
+        try:
+            storeJob(doc)
+        except:
+            pass
 
 if __name__ == "__main__":
-    while True:
-        try:    	
-           poll()
-        except AssertionError:
-           pass # some url is unavailable
-        time.sleep(10)
+    poll()
