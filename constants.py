@@ -1,40 +1,41 @@
-JENKINS = "http://qa.sc.couchbase.com"
-#JENKINS = "http://qa.hq.northscale.net"
+#JENKINS = "http://qa.sc.couchbase.com"
+JENKINS = "http://qa.hq.northscale.net"
 OS_TYPES = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
 
 
 COMPONENTS = [
+    "QUERY-VIEW",
+    "VIEW-VIEW",
+    "XDCR-XDCR",
+    "REB-REB",
+    "PAUSE-REB",
     "BACKUP-TOOLS",
+    "UPGRADE-TOOLS",
+    "RECOVER-TOOLS",
+    "TRANSFER-TOOLS",
+    "RZA-TOOLS",
+    "CLI-TOOLS",
+    "UI-TOOLS",
+    "SANITY-SANITY",
+    "SMOKE-SANITY",
     "BUCKET-EP",
     "CAS-EP",
     "CHECKPOINT-EP",
-    "CLI-TOOLS",
     "CWC-EP",
     "COMPACT-EP",
     "CONNECTION-EP",
     "DOCUMENT-EP",
     "DCP-EP",
+    "UPR-EP",
     "IBR-EP",
     "FAILOVER-REB",
     "FLUSH-EP",
     "HOSTNAME-EP",
     "MOXI-EP",
     "OBSERVE-EP",
-    "PAUSE-REB",
-    "RECOVER-TOOLS",
     "REPLICA-EP",
-    "QUERY-VIEW",
-    "REB-REB",
-    "RZA-REB",
-    "SANITY-SANITY",
-    "SMOKE-SANITY",
-    "TRANSFER-TOOLS",
     "TUNABLE-EP",
-    "UI-TOOLS",
-    "UPGRADE-TOOLS",
-    "VIEW-VIEW",
     "WARM-EP",
-    "XDCR-XDCR",
 ]
 
 DEFAULT_BUILD = "0.0.0-xxxx"
