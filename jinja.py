@@ -41,7 +41,6 @@ def storeJob(doc):
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
-
         for bid in bids:
             if bid in JOBS[doc["name"]]:
                 continue # job already stored
@@ -77,6 +76,14 @@ def storeJob(doc):
 
                 doc["build"] = doc["build"].replace("-rel","").split(",")[0]
 
+                try:
+                    rel, bno = doc["build"].split("-")
+                    doc["build"] = "%s-%s" % (rel, bno.zfill(4))
+                except:
+                    print "unsupported version_number: "+doc["build"]
+                    continue
+
+
                 if doc["build"] in buildHist:
                     print "REJECTED- doc already in build results: %s" % doc
                     print buildHist
@@ -92,12 +99,6 @@ def storeJob(doc):
 
                     continue # already have this build results
 
-                try:
-                    rel, bno = doc["build"].split("-")
-                    doc["build"] = "%s-%s" % (rel, bno.zfill(4))
-                except:
-                    print "unsupported version_number: "+doc["build"]
-                    continue
 
                 key = "%s-%s" % (doc["name"], doc["build_id"])
                 key = hashlib.md5(key).hexdigest()
