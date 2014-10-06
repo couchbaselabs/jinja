@@ -37,7 +37,7 @@ def storeJob(doc):
 
     url = doc["url"]
     res = getJS(url, {"depth" : 0}).json()
-    lastBuild = None
+    buildHist = {}
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
@@ -77,12 +77,20 @@ def storeJob(doc):
 
                 doc["build"] = doc["build"].replace("-rel","").split(",")[0]
 
-                print "%s v %s" % (doc["build"], lastBuild)
+                if doc["build"] in buildHist:
+                    print "REJECTED- doc already in build results: %s" % doc
+                    print buildHist
 
-                if lastBuild == doc["build"]:
-                    continue # already have results for this build
-                else:
-                    lastBuild = doc["build"]
+                    # attempt to delete if this record has been stored in couchbase
+                    try:
+                        oldKey = "%s-%s" % (doc["name"], doc["build_id"])
+                        oldKey = hashlib.md5(oldKey).hexdigest()
+                        client.delete(oldKey, vbucket = 0)
+                        print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
+                    except:
+                        pass
+
+                    continue # already have this build results
 
                 try:
                     rel, bno = doc["build"].split("-")
@@ -97,6 +105,7 @@ def storeJob(doc):
                 try:
                     print val
                     client.set(key, 0, 0, val, 0)
+                    buildHist[doc["build"]] = doc["build_id"]
                 except:
                     print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
