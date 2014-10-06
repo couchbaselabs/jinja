@@ -1,5 +1,4 @@
-#JENKINS = "http://qa.sc.couchbase.com"
-JENKINS = "http://qa.hq.northscale.net"
+JENKINS_URLS = ["http://qa.sc.couchbase.com", "http://qa.hq.northscale.net"]
 OS_TYPES = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
 
 

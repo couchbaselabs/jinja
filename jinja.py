@@ -102,39 +102,40 @@ def storeJob(doc):
 
 def poll():
 
-    res = getJS(JENKINS, {"depth" : 0, "tree" : "jobs[name,url]"})
-    j = res.json()
+    for JENKINS in JENKINS_URLS:
+        res = getJS(JENKINS, {"depth" : 0, "tree" : "jobs[name,url]"})
+        j = res.json()
 
-    for job in j["jobs"]:
-        doc = {}
-        doc["name"] = job["name"]
+        for job in j["jobs"]:
+            doc = {}
+            doc["name"] = job["name"]
 
-        if job["name"] not in JOBS:
-            JOBS[job["name"]] = []
+            if job["name"] not in JOBS:
+                JOBS[job["name"]] = []
 
-        for os in OS_TYPES:
-            if os in doc["name"].upper():
-                doc["os"] = os
+            for os in OS_TYPES:
+                if os in doc["name"].upper():
+                    doc["os"] = os
 
-        if "os" not in doc:
-            print "job name has unrecognized os: %s" %  doc["name"]
-            doc["os"] = "NA"
+            if "os" not in doc:
+                print "job name has unrecognized os: %s" %  doc["name"]
+                doc["os"] = "NA"
 
-        for comp in COMPONENTS:
-            tag, _c = comp.split("-")
-            if tag in doc["name"].upper():
-                doc["component"] = _c
-                break
+            for comp in COMPONENTS:
+                tag, _c = comp.split("-")
+                if tag in doc["name"].upper():
+                    doc["component"] = _c
+                    break
 
-        if "component" not in doc:
-            print "job name has unrecognized component: %s" %  doc["name"]
-            doc["component"] = "MISC"
+            if "component" not in doc:
+                print "job name has unrecognized component: %s" %  doc["name"]
+                doc["component"] = "MISC"
 
-        doc["url"] = job["url"]
-        try:
-            storeJob(doc)
-        except:
-            pass
+            doc["url"] = job["url"]
+            try:
+                storeJob(doc)
+            except:
+                pass
 
 if __name__ == "__main__":
     poll()
