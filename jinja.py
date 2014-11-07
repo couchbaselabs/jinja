@@ -22,7 +22,12 @@ def getAction(actions, key, value = None):
     for a in actions:
         if a is None:
             continue
-        if key in a.keys():
+        keys = a.keys()
+        if "urlName" in keys:
+            if a["urlName"] != "testReport":
+                continue
+
+        if key in keys:
             if value:
                 if a["name"] == value:
                     obj = a["value"]
