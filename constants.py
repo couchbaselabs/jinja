@@ -3,6 +3,7 @@ OS_TYPES = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
 
 
 COMPONENTS = [
+    "N1QL-N1QL",
     "QUERY-VIEW",
     "VIEW-VIEW",
     "XDCR-XDCR",
