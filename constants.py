@@ -1,9 +1,9 @@
-JENKINS_URLS = ["http://qa.sc.couchbase.com", "http://qa.hq.northscale.net"]
-OS_TYPES = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
+JENKINS_URLS = ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"]
+PLATFORMS= ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "ANDROID","IOS"]
 
-
-COMPONENTS = [
+FEATURES = [
     "N1QL-N1QL",
+    "TUQ-N1QL",
     "QUERY-VIEW",
     "VIEW-VIEW",
     "XDCR-XDCR",
@@ -36,6 +36,8 @@ COMPONENTS = [
     "REPLICA-EP",
     "TUNABLE-EP",
     "WARM-EP",
+    "FUNCTIONAL-FUNCTIONAL",
+    "UNIT-UNIT"
 ]
 
 DEFAULT_BUILD = "0.0.0-xxxx"

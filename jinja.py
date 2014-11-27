@@ -1,4 +1,6 @@
 import time
+import subprocess
+import os
 import requests
 import hashlib
 import json
@@ -7,8 +9,6 @@ from constants import *
 
 HOST = "127.0.0.1"
 PORT = 11210
-client = McdClient(HOST, PORT)
-client.sasl_auth_plain("jenkins", "")
 
 def getJS(url, params = None):
     res = requests.get("%s/%s" % (url, "api/json"), params = params)
@@ -24,7 +24,7 @@ def getAction(actions, key, value = None):
             continue
         keys = a.keys()
         if "urlName" in keys:
-            if a["urlName"] != "testReport":
+            if a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
                 continue
 
         if key in keys:
@@ -39,6 +39,12 @@ def getAction(actions, key, value = None):
     return obj
 
 def storeJob(doc):
+
+    bucket = "server"
+    client = McdClient(HOST, PORT)
+    if "mobile" in doc["name"]:
+        bucket = "mobile"
+    client.sasl_auth_plain(bucket, "")
 
     url = doc["url"]
     res = getJS(url, {"depth" : 0}).json()
@@ -68,7 +74,6 @@ def storeJob(doc):
                 doc["totalCount"] = totalCount - skipCount
 
                 params = getAction(actions, "parameters")
-                unset = "0.0.0-xxx"
                 if params is None:
                     doc["priority"] = P1
                     doc["build"] = DEFAULT_BUILD
@@ -81,8 +86,19 @@ def storeJob(doc):
 
                 doc["build"] = doc["build"].replace("-rel","").split(",")[0]
 
+                if doc["os"] in ["ANDROID", "IOS"]:
+                    ts =  res["timestamp"]/1000;
+                    _os = doc["os"].lower()
+
+                    #todo get branch latest
+                    cmd = "cd couchbase-lite-%s && git describe --tags `git log --until %s --max-count=1 | grep commit | awk '{print $2}'`" % (_os, ts)
+                    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    build = p.stdout.readlines()[0]
+                    doc["build"] = build
+
                 try:
-                    rel, bno = doc["build"].split("-")
+                    _build= doc["build"].split("-")
+                    rel, bno = _build[0], _build[1]
                     doc["build"] = "%s-%s" % (rel, bno.zfill(4))
                 except:
                     print "unsupported version_number: "+doc["build"]
@@ -115,6 +131,7 @@ def storeJob(doc):
                 except:
                     print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
+
 def poll():
 
     for JENKINS in JENKINS_URLS:
@@ -128,7 +145,7 @@ def poll():
             if job["name"] not in JOBS:
                 JOBS[job["name"]] = []
 
-            for os in OS_TYPES:
+            for os in PLATFORMS:
                 if os in doc["name"].upper():
                     doc["os"] = os
 
@@ -136,7 +153,7 @@ def poll():
                 print "job name has unrecognized os: %s" %  doc["name"]
                 doc["os"] = "NA"
 
-            for comp in COMPONENTS:
+            for comp in FEATURES:
                 tag, _c = comp.split("-")
                 if tag in doc["name"].upper():
                     doc["component"] = _c
@@ -147,10 +164,21 @@ def poll():
                 doc["component"] = "MISC"
 
             doc["url"] = job["url"]
+
             try:
                 storeJob(doc)
             except:
                 pass
 
+def cloneRepos():
+    os.system("rm -rf couchbase-lite-ios")
+    os.system("git clone https://github.com/couchbase/couchbase-lite-ios")
+    os.system("rm -rf couchbase-lite-android")
+    os.system("git clone https://github.com/couchbase/couchbase-lite-android")
+
+
 if __name__ == "__main__":
-    poll()
+    while True:
+        cloneRepos()
+        poll()
+        time.sleep(30)
