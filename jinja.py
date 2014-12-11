@@ -11,7 +11,7 @@ HOST = "127.0.0.1"
 PORT = 11210
 
 def getJS(url, params = None):
-    res = requests.get("%s/%s" % (url, "api/json"), params = params)
+    res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
     assert res.status_code == 200, res.reason
     return res
 
@@ -150,8 +150,13 @@ def poll():
                     doc["os"] = os
 
             if "os" not in doc:
-                print "job name has unrecognized os: %s" %  doc["name"]
-                doc["os"] = "NA"
+                # attempt partial name lookup
+                for os in PLATFORMS:
+                    if os[:3] in doc["name"].upper():
+                        doc["os"] = os
+                if "os" not in doc:
+                    print "job name has unrecognized os: %s" %  doc["name"]
+                    doc["os"] = "NA"
 
             for comp in FEATURES:
                 tag, _c = comp.split("-")
@@ -178,7 +183,5 @@ def cloneRepos():
 
 
 if __name__ == "__main__":
-    while True:
-        cloneRepos()
-        poll()
-        time.sleep(30)
+    cloneRepos()
+    poll()
