@@ -150,13 +150,21 @@ def poll():
                     doc["os"] = os
 
             if "os" not in doc:
+
                 # attempt partial name lookup
                 for os in PLATFORMS:
-                    if os[:3] in doc["name"].upper():
+                    if os[:3] == doc["name"].upper()[:3]:
                         doc["os"] = os
-                if "os" not in doc:
-                    print "job name has unrecognized os: %s" %  doc["name"]
-                    doc["os"] = "NA"
+
+            if "os" not in doc:
+                # attempt initial name lookup
+                for os in PLATFORMS:
+                    if os[:1] == doc["name"].upper()[:1]:
+                        doc["os"] = os
+
+            if "os" not in doc:
+                print "job name has unrecognized os: %s" %  doc["name"]
+                doc["os"] = "NA"
 
             for comp in FEATURES:
                 tag, _c = comp.split("-")
