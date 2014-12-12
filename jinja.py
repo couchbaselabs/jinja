@@ -1,4 +1,5 @@
 import time
+import datetime
 import subprocess
 import os
 import requests
@@ -87,6 +88,7 @@ def storeJob(doc):
                 doc["build"] = doc["build"].replace("-rel","").split(",")[0]
 
                 if doc["os"] in ["ANDROID", "IOS"]:
+
                     ts =  res["timestamp"]/1000;
                     _os = doc["os"].lower()
 
@@ -94,6 +96,8 @@ def storeJob(doc):
                     cmd = "cd couchbase-lite-%s && git describe --tags `git log --until %s --max-count=1 | grep commit | awk '{print $2}'`" % (_os, ts)
                     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                     build = p.stdout.readlines()[0]
+                    bno = datetime.datetime.fromtimestamp(ts).strftime("%Y%m%d")
+                    build = "%s-%s" % (build.split("-")[0], bno)
                     doc["build"] = build
 
                 try:
