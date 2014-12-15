@@ -103,6 +103,11 @@ def storeJob(doc):
                 try:
                     _build= doc["build"].split("-")
                     rel, bno = _build[0], _build[1]
+                    # check partial rel #'s
+                    rlen = len(rel.split("."))
+                    while rlen < 3:
+                        rel = rel+".0"
+                        rlen+=1
                     doc["build"] = "%s-%s" % (rel, bno.zfill(4))
                 except:
                     print "unsupported version_number: "+doc["build"]
