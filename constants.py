@@ -1,7 +1,10 @@
-JENKINS_URLS = ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"]
-PLATFORMS= ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "ANDROID","IOS"]
+## --- PLATFORMS --- ##
+SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
+MOBILE_PLATFORMS = ["ANDROID","IOS"]
+SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
 
-FEATURES = [
+## --- FEATURES --- ##
+SERVER_FEATURES = [
     "N1QL-N1QL",
     "TUQ-N1QL",
     "QUERY-VIEW",
@@ -42,7 +45,32 @@ FEATURES = [
     "FUNCTIONAL-FUNCTIONAL",
     "UNIT-UNIT"
 ]
+MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
+                   "UNIT-UNIT"]
+SDK_FEATURES = [
+    "LONGEVITY-STRESS",
+    "CORE-CORE",
+    "SNAPSHOT-SNAPSHOT",
+    "SITUATIONAL-SITUATIONAL"
+]
 
+## ---  VIEWS --- ##
+SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+               "platforms": SERVER_PLATFORMS,
+               "features": SERVER_FEATURES,
+               "bucket": "server"}
+
+MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+               "platforms": MOBILE_PLATFORMS,
+               "features": MOBILE_FEATURES,
+               "bucket": "mobile"}
+SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com"],
+               "platforms": SDK_PLATFORMS,
+               "features": SDK_FEATURES,
+               "bucket": "sdk"}
+VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW]
+
+## misc
 DEFAULT_BUILD = "0.0.0-xxxx"
 EXCLUDED = []
 

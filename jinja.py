@@ -39,12 +39,9 @@ def getAction(actions, key, value = None):
 
     return obj
 
-def storeJob(doc):
+def storeJob(doc, bucket):
 
-    bucket = "server"
     client = McdClient(HOST, PORT)
-    if "mobile" in doc["name"]:
-        bucket = "mobile"
     client.sasl_auth_plain(bucket, "")
 
     url = doc["url"]
@@ -66,9 +63,12 @@ def storeJob(doc):
             if res["result"] not in ["SUCCESS", "UNSTABLE"]:
                 continue # invalid build
 
-            actions = res["actions"]
-            totalCount = getAction(actions, "totalCount") or 0
-            if totalCount > 0:
+            if bucket == "server":
+                actions = res["actions"]
+                totalCount = getAction(actions, "totalCount") or 0
+                if totalCount == 0:
+                    continue # no tests
+
                 failCount  = getAction(actions, "failCount") or 0
                 skipCount  = getAction(actions, "skipCount") or 0
                 doc["failCount"] = failCount
@@ -83,71 +83,87 @@ def storeJob(doc):
                     doc["priority"] = getAction(params, "name", "priority") or P1
                     if doc["priority"].upper() not in [P0, P1, P2]:
                         doc["priority"] = P1
-
-
                 doc["build"] = doc["build"].replace("-rel","").split(",")[0]
-
-                if doc["os"] in ["ANDROID", "IOS"]:
-
-                    ts =  res["timestamp"]/1000;
-                    _os = doc["os"].lower()
-
-                    #todo get branch latest
-                    cmd = "cd couchbase-lite-%s && git describe --tags `git log --until %s --max-count=1 | grep commit | awk '{print $2}'`" % (_os, ts)
-                    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    build = p.stdout.readlines()[0]
-                    bno = datetime.datetime.fromtimestamp(ts).strftime("%Y%m%d")
-                    build = "%s-%s" % (build.split("-")[0], bno)
-                    doc["build"] = build
-
                 try:
                     _build= doc["build"].split("-")
                     rel, bno = _build[0], _build[1]
+                    # check partial rel #'s
+                    rlen = len(rel.split("."))
+                    while rlen < 3:
+                        rel = rel+".0"
+                        rlen+=1
                     doc["build"] = "%s-%s" % (rel, bno.zfill(4))
                 except:
                     print "unsupported version_number: "+doc["build"]
                     continue
 
+            else:
+                # make simple doc ie for sdk and mobile
+                totalCount = 1
+                failCount = 0
+                skipCount = 0
+                if res["result"] == "UNSTABLE":
+                    failCount = 1
 
-                if doc["build"] in buildHist:
-                    print "REJECTED- doc already in build results: %s" % doc
-                    print buildHist
+                doc["failCount"] = failCount
+                doc["totalCount"] = totalCount - skipCount
+                doc["priority"] =  P0
 
-                    # attempt to delete if this record has been stored in couchbase
-                    try:
-                        oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                        oldKey = hashlib.md5(oldKey).hexdigest()
-                        client.delete(oldKey, vbucket = 0)
-                        print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
-                    except:
-                        pass
+                ts =  res["timestamp"]/1000;
+                month = int(datetime.datetime.fromtimestamp(ts).strftime("%m"))
+                qtr = 1
+                if month > 6:
+                   qtr = 2
 
-                    continue # already have this build results
+                _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m.%d")
+                yr, md = _ts.split("-")
+                # builds for simple docs are <yr>.<qtr>-<monthday>
+                doc["build"] = "%s.%s-%s" % (yr,qtr,md)
 
+            if doc["build"] in buildHist:
 
-                key = "%s-%s" % (doc["name"], doc["build_id"])
-                key = hashlib.md5(key).hexdigest()
-                val = json.dumps(doc)
+                print "REJECTED- doc already in build results: %s" % doc
+                print buildHist
+
+                # attempt to delete if this record has been stored in couchbase
                 try:
-                    print val
-                    client.set(key, 0, 0, val, 0)
-                    buildHist[doc["build"]] = doc["build_id"]
+                    oldKey = "%s-%s" % (doc["name"], doc["build_id"])
+                    oldKey = hashlib.md5(oldKey).hexdigest()
+                    client.delete(oldKey, vbucket = 0)
+                    print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
                 except:
-                    print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
+                    pass
+
+                continue # already have this build results
 
 
-def poll():
+            key = "%s-%s" % (doc["name"], doc["build_id"])
+            key = hashlib.md5(key).hexdigest()
+            val = json.dumps(doc)
+            try:
+                print val
+                client.set(key, 0, 0, val, 0)
+                buildHist[doc["build"]] = doc["build_id"]
+            except:
+                print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
-    for JENKINS in JENKINS_URLS:
-        res = getJS(JENKINS, {"depth" : 0, "tree" : "jobs[name,url]"})
+
+def poll(view):
+
+    PLATFORMS = view["platforms"]
+    FEATURES = view["features"]
+
+    for url in view["urls"]:
+        res = getJS(url, {"depth" : 0, "tree" : "jobs[name,url]"})
         j = res.json()
 
         for job in j["jobs"]:
             doc = {}
             doc["name"] = job["name"]
 
-            if job["name"] not in JOBS:
-                JOBS[job["name"]] = []
+            if job["name"] in JOBS:
+                # already processed
+                continue
 
             for os in PLATFORMS:
                 if os in doc["name"].upper():
@@ -167,8 +183,8 @@ def poll():
                         doc["os"] = os
 
             if "os" not in doc:
-                print "job name has unrecognized os: %s" %  doc["name"]
-                doc["os"] = "NA"
+                print "%s: job name has unrecognized os: %s" %  (view["bucket"], doc["name"])
+                continue
 
             for comp in FEATURES:
                 tag, _c = comp.split("-")
@@ -177,23 +193,18 @@ def poll():
                     break
 
             if "component" not in doc:
-                print "job name has unrecognized component: %s" %  doc["name"]
-                doc["component"] = "MISC"
+                print "%s: job name has unrecognized component: %s" %  (view["bucket"], doc["name"])
+                continue
 
+
+            JOBS[job["name"]] = []
             doc["url"] = job["url"]
 
             try:
-                storeJob(doc)
+                storeJob(doc, view["bucket"])
             except:
                 pass
 
-def cloneRepos():
-    os.system("rm -rf couchbase-lite-ios")
-    os.system("git clone https://github.com/couchbase/couchbase-lite-ios")
-    os.system("rm -rf couchbase-lite-android")
-    os.system("git clone https://github.com/couchbase/couchbase-lite-android")
-
-
 if __name__ == "__main__":
-    cloneRepos()
-    poll()
+    for view in VIEWS:
+        poll(view)
