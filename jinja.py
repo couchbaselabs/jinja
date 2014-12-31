@@ -58,12 +58,16 @@ def storeJob(doc, bucket):
 
             doc["build_id"] = bid
             res = getJS(url+str(bid), {"depth" : 0}).json()
+
+            if "result" not in res:
+                continue
+
             doc["result"] = res["result"]
 
-            if res["result"] not in ["SUCCESS", "UNSTABLE"]:
-                continue # invalid build
 
             if bucket == "server":
+                if res["result"] not in ["SUCCESS", "UNSTABLE"]:
+                    continue # invalid build
                 actions = res["actions"]
                 totalCount = getAction(actions, "totalCount") or 0
                 if totalCount == 0:
@@ -102,8 +106,10 @@ def storeJob(doc, bucket):
                 totalCount = 1
                 failCount = 0
                 skipCount = 0
-                if res["result"] == "UNSTABLE":
+                if res["result"] in ["UNSTABLE", "FAILURE"]:
                     failCount = 1
+                elif res["result"] != "SUCCESS":
+                    continue # ignore
 
                 doc["failCount"] = failCount
                 doc["totalCount"] = totalCount - skipCount

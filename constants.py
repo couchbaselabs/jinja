@@ -1,14 +1,16 @@
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
-MOBILE_PLATFORMS = ["ANDROID","IOS"]
+MOBILE_PLATFORMS = ["ANDROID","IOS", "SGW"]
 SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
-    "N1QL-N1QL",
-    "TUQ-N1QL",
-    "QUERY-VIEW",
+    "2I-2I",
+    "NSERV-NSERV",
+    "N1QL-QUERY",
+    "TUQ-QUERY",
     "VIEW-VIEW",
+    "QUERY-QUERY",
     "XDCR-XDCR",
     "REB-REB",
     "PAUSE-REB",
@@ -19,7 +21,7 @@ SERVER_FEATURES = [
     "TRANSFER-TOOLS",
     "RZA-TOOLS",
     "CLI-TOOLS",
-    "UI-TOOLS",
+    "UI-UI",
     "IBR-TOOLS",
     "CONNECTION-TOOLS",
     "SANITY-SANITY",
@@ -46,12 +48,16 @@ SERVER_FEATURES = [
     "UNIT-UNIT"
 ]
 MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
+                   "REGRESSION-REGRESSION",
+                   "GATEWAY-SYNC",
+                   "DASH-PERF",
                    "UNIT-UNIT"]
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
-    "CORE-CORE",
-    "SNAPSHOT-SNAPSHOT",
-    "SITUATIONAL-SITUATIONAL"
+    "SITUATIONAL-SITUATIONAL",
+    "CORE-CLIENT",
+    "SNAPSHOT-CLIENT",
+    "CLIENT-CLIENT"
 ]
 
 ## ---  VIEWS --- ##
@@ -60,7 +66,7 @@ SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.
                "features": SERVER_FEATURES,
                "bucket": "server"}
 
-MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
