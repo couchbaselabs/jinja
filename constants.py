@@ -5,6 +5,7 @@ SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "SECU-SECURITY",
     "2I-2I",
     "NSERV-NSERV",
     "N1QL-QUERY",
