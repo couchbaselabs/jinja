@@ -12,8 +12,13 @@ HOST = "127.0.0.1"
 PORT = 11210
 
 def getJS(url, params = None):
-    res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
-    assert res.status_code == 200, res.reason
+    res = None
+    try:
+        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+    except:
+        print "[Error] url unreachable: %s" % url
+        pass
+
     return res
 
 def getAction(actions, key, value = None):
@@ -46,6 +51,9 @@ def storeJob(doc, bucket):
 
     url = doc["url"]
     res = getJS(url, {"depth" : 0}).json()
+    if res is None:
+        return
+
     buildHist = {}
     if res["lastBuild"]:
 
@@ -58,6 +66,8 @@ def storeJob(doc, bucket):
 
             doc["build_id"] = bid
             res = getJS(url+str(bid), {"depth" : 0}).json()
+            if res is None:
+                return
 
             if "result" not in res:
                 continue
@@ -161,6 +171,9 @@ def poll(view):
 
     for url in view["urls"]:
         res = getJS(url, {"depth" : 0, "tree" : "jobs[name,url]"})
+        if res is None:
+            continue 
+
         j = res.json()
 
         for job in j["jobs"]:
@@ -194,7 +207,9 @@ def poll(view):
 
             for comp in FEATURES:
                 tag, _c = comp.split("-")
-                if tag in doc["name"].upper():
+                docname = doc["name"].upper()
+                docname = docname.replace("-","_")
+                if tag in docname:
                     doc["component"] = _c
                     break
 

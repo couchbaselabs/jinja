@@ -5,9 +5,11 @@ SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "RZA-RZA",
     "GEO-GEO",
     "EPENG-EP",
     "SECU-SECURITY",
+    "TUNABLE-TUNABLE",
     "2I-2I",
     "NSERV-NSERV",
     "N1QL-QUERY",
@@ -23,9 +25,8 @@ SERVER_FEATURES = [
     "UPGRA-UPGRADE",
     "RECOVER-TOOLS",
     "TRANSFER-TOOLS",
-    "RZA-TOOLS",
     "CLI-TOOLS",
-    "UI-UI",
+    "_UI-UI",
     "IBR-TOOLS",
     "CONNECTION-TOOLS",
     "SANITY-SANITY",
@@ -46,7 +47,6 @@ SERVER_FEATURES = [
 #   "MOXI-EP",
 #   "OBSERVE-EP",
 #   "REPLICA-EP",
-    "TUNABLE-TUNABLE",
 #    "WARM-EP",
 #    "FUNCTIONAL-FUNCTIONAL",
     "UNIT-UNIT",
