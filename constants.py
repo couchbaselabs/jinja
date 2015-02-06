@@ -5,6 +5,8 @@ SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "CBSGW-SYNCGW",
+    "FOREST-FORESTDB",
     "RZA-RZA",
     "GEO-GEO",
     "EPENG-EP",
@@ -50,12 +52,12 @@ SDK_FEATURES = [
 ]
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
 
-MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com"],
+MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
