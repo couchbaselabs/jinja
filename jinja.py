@@ -76,7 +76,7 @@ def storeJob(doc, bucket):
 
 
             if bucket == "server":
-                if res["result"] not in ["SUCCESS", "UNSTABLE"]:
+                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE"]:
                     continue # invalid build
                 actions = res["actions"]
                 totalCount = getAction(actions, "totalCount") or 0
