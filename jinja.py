@@ -10,7 +10,9 @@ from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
 HOST = "127.0.0.1"
-PORT = 11210
+PORT = 11210 
+if os.environ.get('MC_PORT'):
+    PORT = int(os.environ.get('MC_PORT'))
 
 def getJS(url, params = None):
     res = None
@@ -45,13 +47,15 @@ def getAction(actions, key, value = None):
 
     return obj
 
-def storeJob(doc, bucket):
+def storeJob(jobDoc, bucket, first_pass = True):
 
     client = McdClient(HOST, PORT)
     client.sasl_auth_plain(bucket, "")
 
+    doc = jobDoc
     url = doc["url"]
     res = getJS(url, {"depth" : 0}).json()
+
     if res is None:
         return
 
@@ -59,13 +63,16 @@ def storeJob(doc, bucket):
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
-        bids.reverse()
+        if first_pass:
+            bids.reverse() # reverse bid order from oldest to newest
+
         lastTotalCount = -1
         for bid in bids:
             if bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
-                JOBS[doc["name"]].append(bid)
+                if first_pass == False:
+                    JOBS[doc["name"]].append(bid)
 
             doc["build_id"] = bid
             res = getJS(url+str(bid), {"depth" : 0}).json()
@@ -184,6 +191,8 @@ def storeJob(doc, bucket):
             except:
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
+    if first_pass:
+        storeJob(jobDoc, bucket, first_pass = False)
 
 def poll(view):
 
