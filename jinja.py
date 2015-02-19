@@ -10,7 +10,7 @@ from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
 HOST = "127.0.0.1"
-PORT = 12000
+PORT = 11210
 
 def getJS(url, params = None):
     res = None
