@@ -1,3 +1,4 @@
+import re
 import time
 import datetime
 import subprocess
@@ -9,12 +10,12 @@ from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
 HOST = "127.0.0.1"
-PORT = 11210
+PORT = 12000
 
 def getJS(url, params = None):
     res = None
     try:
-        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=3)
     except:
         print "[Error] url unreachable: %s" % url
         pass
@@ -58,6 +59,8 @@ def storeJob(doc, bucket):
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
+        bids.reverse()
+        lastTotalCount = -1
         for bid in bids:
             if bid in JOBS[doc["name"]]:
                 continue # job already stored
@@ -76,15 +79,22 @@ def storeJob(doc, bucket):
 
 
             if bucket == "server":
-                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE"]:
-                    continue # invalid build
+                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+                    continue # unknown result state
+
                 actions = res["actions"]
                 totalCount = getAction(actions, "totalCount") or 0
-                if totalCount == 0:
-                    continue # no tests
-
                 failCount  = getAction(actions, "failCount") or 0
                 skipCount  = getAction(actions, "skipCount") or 0
+                if totalCount == 0:
+                    if lastTotalCount == -1:
+                        continue # no tests ever passed for this build
+                    else:
+                        totalCount = lastTotalCount
+                        failCount = totalCount
+                else:
+                    lastTotalCount = totalCount
+
                 doc["failCount"] = failCount
                 doc["totalCount"] = totalCount - skipCount
 
@@ -106,6 +116,17 @@ def storeJob(doc, bucket):
                     while rlen < 3:
                         rel = rel+".0"
                         rlen+=1
+
+                    # verify rel, build
+                    m=re.match("^\d\.\d\.\d{1,5}", rel)
+                    if m is None:
+                        print "unsupported version_number: "+doc["build"]
+                        continue
+                    m=re.match("^\d{1,10}", bno)
+                    if m is None:
+                        print "unsupported version_number: "+doc["build"]
+                        continue
+
                     doc["build"] = "%s-%s" % (rel, bno.zfill(4))
                 except:
                     print "unsupported version_number: "+doc["build"]
@@ -138,15 +159,15 @@ def storeJob(doc, bucket):
 
             if doc["build"] in buildHist:
 
-                print "REJECTED- doc already in build results: %s" % doc
-                print buildHist
+                #print "REJECTED- doc already in build results: %s" % doc
+                #print buildHist
 
                 # attempt to delete if this record has been stored in couchbase
                 try:
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
                     client.delete(oldKey, vbucket = 0)
-                    print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
+                    #print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
                 except:
                     pass
 
@@ -157,7 +178,7 @@ def storeJob(doc, bucket):
             key = hashlib.md5(key).hexdigest()
             val = json.dumps(doc)
             try:
-                print val
+                #print val
                 client.set(key, 0, 0, val, 0)
                 buildHist[doc["build"]] = doc["build_id"]
             except:
@@ -172,7 +193,7 @@ def poll(view):
     for url in view["urls"]:
         res = getJS(url, {"depth" : 0, "tree" : "jobs[name,url]"})
         if res is None:
-            continue 
+            continue
 
         j = res.json()
 
