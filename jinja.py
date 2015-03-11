@@ -140,14 +140,22 @@ def storeJob(jobDoc, bucket, first_pass = True):
                     continue
 
             else:
-                # make simple doc ie for sdk and mobile
-                totalCount = 1
-                failCount = 0
-                skipCount = 0
-                if res["result"] in ["UNSTABLE", "FAILURE"]:
-                    failCount = 1
-                elif res["result"] != "SUCCESS":
-                    continue # ignore
+                # use date as version for sdk and mobile
+                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+                    continue 
+
+                actions = res["actions"]
+                totalCount = getAction(actions, "totalCount") or 0
+                failCount  = getAction(actions, "failCount") or 0
+                skipCount  = getAction(actions, "skipCount") or 0
+                if totalCount == 0:
+                    if lastTotalCount == -1:
+                        continue # no tests ever passed for this build
+                    else:
+                        totalCount = lastTotalCount
+                        failCount = totalCount
+                else:
+                    lastTotalCount = totalCount
 
                 doc["failCount"] = failCount
                 doc["totalCount"] = totalCount - skipCount

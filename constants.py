@@ -1,7 +1,7 @@
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
 MOBILE_PLATFORMS = ["ANDROID","IOS", "SGW"]
-SDK_PLATFORMS= [".NET","JAVA","LIBCB","NODE"]
+SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
@@ -52,6 +52,8 @@ SDK_FEATURES = [
     "CLIENT-CLIENT"
 ]
 
+#feature-libcouchbase-core-win/
+
 ## ---  VIEWS --- ##
 SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com"],
                "platforms": SERVER_PLATFORMS,
@@ -62,10 +64,11 @@ MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
-SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com"],
+SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational/", "http://sdkbuilds.couchbase.com/view/LCB/job/feature/"],
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}
+
 VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW]
 
 ## misc
