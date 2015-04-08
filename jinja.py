@@ -161,9 +161,12 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 doc["totalCount"] = totalCount - skipCount
                 doc["priority"] =  P0
 
-                now = datetime.datetime.now()
-                doc["build"] = "%s-%d%d%d" % (MOBILE_VERSION, now.year, now.month, now.day)
-
+                ts =  res["timestamp"]/1000;
+                month = int(datetime.datetime.fromtimestamp(ts).strftime("%m"))
+                _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m%d")
+                yr, md = _ts.split("-")
+                doc["build"] = "%s-%s%s" % (MOBILE_VERSION, yr, md)
+            
             if doc["build"] in buildHist:
 
                 #print "REJECTED- doc already in build results: %s" % doc
@@ -225,7 +228,7 @@ def poll(view):
                     if os[:3] == doc["name"].upper()[:3]:
                         doc["os"] = os
 
-            if "os" not in doc:
+            if "os" not in doc and view["bucket"] != "mobile":
                 # attempt initial name lookup
                 for os in PLATFORMS:
                     if os[:1] == doc["name"].upper()[:1]:

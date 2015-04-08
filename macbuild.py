@@ -28,7 +28,8 @@ def poll():
     url = "https://macbuild.hq.couchbase.com/xcode/api/integrations/filter/latest"
     latest = getJS(url)
     now = datetime.datetime.now()
-    build_no  = "%s-%d%d%d" % (MOBILE_VERSION, now.year, now.month, now.day)
+    ts = now.strftime("%Y%m%d")
+    build_no  = "%s-%s" % (MOBILE_VERSION, ts)
     client = McdClient(HOST, PORT)
     client.sasl_auth_plain("mobile", "")
 
@@ -38,7 +39,7 @@ def poll():
             continue
         key = latest[build]['revisionBlueprint']['DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey']
         rev = latest[build]['revisionBlueprint']['DVTSourceControlWorkspaceBlueprintLocationsKey'][key]['DVTSourceControlLocationRevisionKey']
-        name = latest[build]['bot']['name'].replace(" ","")
+        name = "iOS-"+latest[build]['bot']['name'].replace(" ","")
         build_id = latest[build]['number']
         results = latest[build]['buildResultSummary']
         totalCount = results['testsCount']
@@ -52,7 +53,7 @@ def poll():
             docname = name.upper()
             docname = docname.replace("-","_")
             if tag in docname:
-               component = tag
+               component = _c 
         if component:
             doc = {'build_id': build_id,
                    'priority': 'P0',
@@ -78,7 +79,5 @@ def poll():
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
 if __name__ == "__main__":
-    while True:
-        poll()
-        time.sleep(600)
+    poll()
 
