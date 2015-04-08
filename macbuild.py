@@ -10,6 +10,9 @@ from constants import *
 now = datetime.datetime.now()
 HOST = "127.0.0.1"
 PORT = 11210
+TOTAL_COUNT_LOG = {"iOS-Functionaltests": 13,
+                   "iOS-UnittestsUnittests": 287}
+
 if os.environ.get('MC_PORT'):
     PORT = int(os.environ.get('MC_PORT'))
 
@@ -45,6 +48,17 @@ def poll():
         totalCount = results['testsCount']
         failCount = results['errorCount']
         result = 'SUCCESS'
+
+        if name in  TOTAL_COUNT_LOG:
+            if totalCount == 0:
+                # use historical value for total count
+                totalCount = TOTAL_COUNT_LOG[name]
+            elif totalCount != TOTAL_COUNT_LOG:
+                # update total count log
+                TOTAL_COUNT_LOG[name] = totalCount
+        else:
+            TOTAL_COUNT_LOG[name] = totalCount
+
         if (failCount > 0):
             result = 'UNSTABLE'
         component = None
