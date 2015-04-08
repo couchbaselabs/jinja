@@ -1,7 +1,8 @@
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC"]
-MOBILE_PLATFORMS = ["ANDROID","IOS", "SGW"]
+MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
+MOBILE_VERSION = "1.1"
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
@@ -40,9 +41,8 @@ SERVER_FEATURES = [
     "UNIT-UNIT"
 ]
 MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
-                   "REGRESSION-REGRESSION",
-                   "GATEWAY-SYNC",
-                   "DASH-PERF",
+                   "CBLITE-CBLITE",
+                   "BUILD-BUILD",
                    "UNIT-UNIT"]
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
@@ -60,7 +60,7 @@ SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.
                "features": SERVER_FEATURES,
                "bucket": "server"}
 
-MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/", "http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}

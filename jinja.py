@@ -161,16 +161,8 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 doc["totalCount"] = totalCount - skipCount
                 doc["priority"] =  P0
 
-                ts =  res["timestamp"]/1000;
-                month = int(datetime.datetime.fromtimestamp(ts).strftime("%m"))
-                qtr = 1
-                if month > 6:
-                   qtr = 2
-
-                _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m.%d")
-                yr, md = _ts.split("-")
-                # builds for simple docs are <yr>.<qtr>-<monthday>
-                doc["build"] = "%s.%s-%s" % (yr,qtr,md)
+                now = datetime.datetime.now()
+                doc["build"] = "%s-%d%d%d" % (MOBILE_VERSION, now.year, now.month, now.day)
 
             if doc["build"] in buildHist:
 
