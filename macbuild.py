@@ -93,5 +93,10 @@ def poll():
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
 if __name__ == "__main__":
-    poll()
+    while True:
+        try:
+            poll()
+        except:
+            pass
+        time.sleep(600)
 
