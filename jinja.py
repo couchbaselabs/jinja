@@ -165,7 +165,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 month = int(datetime.datetime.fromtimestamp(ts).strftime("%m"))
                 _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m%d")
                 yr, md = _ts.split("-")
-                doc["build"] = "%s-%s%s" % (MOBILE_VERSION, yr, md)
+                doc["build"] = "%s-%s%s" % (MOBILE_VERSION, yr[-1], md)
             
             if doc["build"] in buildHist:
 

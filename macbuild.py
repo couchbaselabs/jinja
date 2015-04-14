@@ -32,7 +32,7 @@ def poll():
     latest = getJS(url)
     now = datetime.datetime.now()
     ts = now.strftime("%Y%m%d")
-    build_no  = "%s-%s" % (MOBILE_VERSION, ts)
+    build_no  = "%s-%s" % (MOBILE_VERSION, ts[-5:])
     client = McdClient(HOST, PORT)
     client.sasl_auth_plain("mobile", "")
 
