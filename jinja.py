@@ -110,7 +110,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
                     doc["priority"] = P1
                     doc["build"] = DEFAULT_BUILD
                 else:
-                    doc["build"] = getAction(params, "name", "version_number") or DEFAULT_BUILD
+                    doc["build"] = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  DEFAULT_BUILD
                     doc["priority"] = getAction(params, "name", "priority") or P1
                     if doc["priority"].upper() not in [P0, P1, P2]:
                         doc["priority"] = P1

@@ -6,6 +6,7 @@ MOBILE_VERSION = "1.1"
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "SDK-SDK",
     "BREAKPAD-BREAKPAD",
     "CBSGW-SYNCGW",
     "FOREST-FORESTDB",
@@ -59,11 +60,10 @@ SDK_FEATURES = [
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com"],
+SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
-
 MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/", "http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
