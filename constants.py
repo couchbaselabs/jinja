@@ -67,7 +67,7 @@ MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/", "http://qa.hq.
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
-SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational/", "http://sdkbuilds.couchbase.com/view/LCB/job/feature/"],
+SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/feature/"],
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}
