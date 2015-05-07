@@ -7,6 +7,7 @@ MOBILE_VERSION = "1.1"
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
     "SDK-SDK",
+    "MOBILE-MOBILE",
     "BREAKPAD-BREAKPAD",
     "CBSGW-SYNCGW",
     "FOREST-FORESTDB",
@@ -35,6 +36,7 @@ SERVER_FEATURES = [
     "TOOLS-TOOLS",
     "IBR-TOOLS",
     "CONNECTION-TOOLS",
+    "SANITY_EXT-SANITY_EXT",
     "EXTENDED-SANITY_EXT",
     "SANITY-SANITY",
     "SANIT-SANITY",
@@ -64,7 +66,7 @@ SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
-MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/", "http://qa.hq.northscale.net", "http://qa.sc.couchbase.com"],
+MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
