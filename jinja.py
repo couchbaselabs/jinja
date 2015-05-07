@@ -83,7 +83,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 continue
 
             doc["result"] = res["result"]
-
+            doc["duration"] = res["duration"]
 
             if bucket == "server":
                 if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
