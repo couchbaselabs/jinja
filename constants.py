@@ -8,6 +8,8 @@ MOBILE_VERSION = "1.1"
 SERVER_FEATURES = [
     "SDK-SDK",
     "MOBILE-MOBILE",
+    "SANITY_EXT-SANITY_EXT",
+    "EXTENDED-SANITY_EXT",
     "BREAKPAD-BREAKPAD",
     "CBSGW-SYNCGW",
     "FOREST-FORESTDB",
@@ -36,8 +38,6 @@ SERVER_FEATURES = [
     "TOOLS-TOOLS",
     "IBR-TOOLS",
     "CONNECTION-TOOLS",
-    "SANITY_EXT-SANITY_EXT",
-    "EXTENDED-SANITY_EXT",
     "SANITY-SANITY",
     "SANIT-SANITY",
     "SMOKE-SANITY",
@@ -62,7 +62,7 @@ SDK_FEATURES = [
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/"],
+SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.sc.couchbase.com/view/extended/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
@@ -70,7 +70,7 @@ MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
-SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/feature/"],
+SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/feature/", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/"],
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}

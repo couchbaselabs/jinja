@@ -27,7 +27,6 @@ def getJS(url, params = None):
 def getAction(actions, key, value = None):
 
     obj = None
-
     for a in actions:
         if a is None:
             continue
@@ -54,6 +53,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
 
     doc = jobDoc
     url = doc["url"]
+
     res = getJS(url, {"depth" : 0}).json()
 
     if res is None:
@@ -63,11 +63,22 @@ def storeJob(jobDoc, bucket, first_pass = True):
     if res["lastBuild"]:
 
         bids = [b["number"] for b in res["builds"]]
-        if first_pass:
-            bids.reverse() # reverse bid order from oldest to newest
 
         lastTotalCount = -1
+        idx=0
+
         for bid in bids:
+            idx = idx + 1
+            i = 1
+            if idx < len(bids):
+                while bids[idx] != bid-i:
+                    key = "%s-%s" % (doc["name"], bid-i)
+                    key = hashlib.md5(key).hexdigest()
+                    try:
+                        client.delete(key, vbucket=0)
+                    except:
+                        pass
+                    i = i + 1
             if bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
@@ -166,13 +177,15 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m%d")
                 yr, md = _ts.split("-")
                 doc["build"] = "%s-%s%s" % (MOBILE_VERSION, yr[-1], md)
-            
+
+
             if doc["build"] in buildHist:
 
                 #print "REJECTED- doc already in build results: %s" % doc
                 #print buildHist
 
                 # attempt to delete if this record has been stored in couchbase
+
                 try:
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
@@ -193,6 +206,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 buildHist[doc["build"]] = doc["build_id"]
             except:
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
+
 
     if first_pass:
         storeJob(jobDoc, bucket, first_pass = False)
