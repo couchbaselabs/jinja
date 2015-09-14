@@ -9,8 +9,9 @@ import json
 from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
-HOST = "127.0.0.1"
-PORT = 11210 
+
+HOST =  "127.0.0.1"
+PORT = 11210
 if os.environ.get('MC_PORT'):
     PORT = int(os.environ.get('MC_PORT'))
 
@@ -65,20 +66,8 @@ def storeJob(jobDoc, bucket, first_pass = True):
         bids = [b["number"] for b in res["builds"]]
 
         lastTotalCount = -1
-        idx=0
 
         for bid in bids:
-            idx = idx + 1
-            i = 1
-            if idx < len(bids):
-                while bids[idx] != bid-i:
-                    key = "%s-%s" % (doc["name"], bid-i)
-                    key = hashlib.md5(key).hexdigest()
-                    try:
-                        client.delete(key, vbucket=0)
-                    except:
-                        pass
-                    i = i + 1
             if bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
@@ -104,6 +93,20 @@ def storeJob(jobDoc, bucket, first_pass = True):
                 totalCount = getAction(actions, "totalCount") or 0
                 failCount  = getAction(actions, "failCount") or 0
                 skipCount  = getAction(actions, "skipCount") or 0
+                claimed = getAction(actions, "claimed") or False
+                if claimed == True:
+                    reason = getAction(actions, "reason") or ""
+		    doc["claim"] = reason
+		    try:
+                    	rep_dict={m:"<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
+                        	format(m,m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
+                    	if rep_dict:
+                            pattern = re.compile('|'.join(rep_dict.keys()))
+                            doc["claim"] = pattern.sub(lambda x: rep_dict[x.group()],reason)
+		    except Exception as e:
+			raise Exception(e)
+                else:
+                    doc["claim"] = ""
                 if totalCount == 0:
                     if lastTotalCount == -1:
                         continue # no tests ever passed for this build
@@ -115,7 +118,6 @@ def storeJob(jobDoc, bucket, first_pass = True):
 
                 doc["failCount"] = failCount
                 doc["totalCount"] = totalCount - skipCount
-
                 params = getAction(actions, "parameters")
                 if params is None:
                     doc["priority"] = P1
@@ -153,7 +155,7 @@ def storeJob(jobDoc, bucket, first_pass = True):
             else:
                 # use date as version for sdk and mobile
                 if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                    continue 
+                    continue
 
                 actions = res["actions"]
                 totalCount = getAction(actions, "totalCount") or 0

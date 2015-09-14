@@ -6,6 +6,8 @@ MOBILE_VERSION = "1.1"
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "MOBILEUPGRADE-MOBILE_UPGRADE",
+    "EEONLY-EEONLY",
     "SDK-SDK",
     "MOBILE-MOBILE",
     "SANITY_EXT-SANITY_EXT",
@@ -20,6 +22,7 @@ SERVER_FEATURES = [
     "TUNABLE-TUNABLE",
     "2I-2I",
     "NSERV-NSERV",
+    "RQG-RQG",
     "N1QL-QUERY",
     "TUQ-QUERY",
     "VIEW-VIEW",
@@ -62,7 +65,7 @@ SDK_FEATURES = [
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : ["http://qa.hq.northscale.net", "http://qa.sc.couchbase.com", "http://ci.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.sc.couchbase.com/view/extended/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
