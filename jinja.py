@@ -9,6 +9,7 @@ import json
 from mc_bin_client import MemcachedClient as McdClient
 from constants import *
 
+JOBS = {}
 
 HOST =  "127.0.0.1"
 PORT = 11210
@@ -46,6 +47,65 @@ def getAction(actions, key, value = None):
                 break
 
     return obj
+
+def getBuildAndPriority(params, isMobile = False):
+    build = None
+    priority = DEFAULT_BUILD
+
+    if params:
+        if not isMobile:
+            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  DEFAULT_BUILD
+        else:
+            build = getAction(params, "name", "CBL_iOS_Build")
+
+        priority = getAction(params, "name", "priority") or P1
+        if priority.upper() not in [P0, P1, P2]:
+            priority = P1
+
+    build = build.replace("-rel","").split(",")[0]
+    try:
+        _build = build.split("-")
+        rel, bno = _build[0], _build[1]
+        # check partial rel #'s
+        rlen = len(rel.split("."))
+        while rlen < 3:
+            rel = rel+".0"
+            rlen+=1
+
+        # verify rel, build
+        m=re.match("^\d\.\d\.\d{1,5}", rel)
+        if m is None:
+            print "unsupported version_number: "+build
+            return None, None
+        m=re.match("^\d{1,10}", bno)
+        if m is None:
+            print "unsupported version_number: "+build
+            return None, None
+
+        build = "%s-%s" % (rel, bno.zfill(4))
+    except:
+        print "unsupported version_number: "+doc["build"]
+        return None, None
+
+    return build, priority
+
+def getClaimReason(actions):
+    reason = ""
+
+    if not getAction(actions, "claimed"):
+        return reason # job not claimed
+
+    reason = getAction(actions, "reason") or ""
+    try:
+        rep_dict={m:"<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
+            format(m,m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
+        if rep_dict:
+            pattern = re.compile('|'.join(rep_dict.keys()))
+            reason = pattern.sub(lambda x: rep_dict[x.group()],reason)
+    except Exception as e:
+        pass
+
+    return reason
 
 def storeJob(jobDoc, bucket, first_pass = True):
 
@@ -85,101 +145,31 @@ def storeJob(jobDoc, bucket, first_pass = True):
             doc["result"] = res["result"]
             doc["duration"] = res["duration"]
 
-            if bucket == "server":
-                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                    continue # unknown result state
+            if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+                continue # unknown result state
 
-                actions = res["actions"]
-                totalCount = getAction(actions, "totalCount") or 0
-                failCount  = getAction(actions, "failCount") or 0
-                skipCount  = getAction(actions, "skipCount") or 0
-                claimed = getAction(actions, "claimed") or False
-                if claimed == True:
-                    reason = getAction(actions, "reason") or ""
-		    doc["claim"] = reason
-		    try:
-                    	rep_dict={m:"<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
-                        	format(m,m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
-                    	if rep_dict:
-                            pattern = re.compile('|'.join(rep_dict.keys()))
-                            doc["claim"] = pattern.sub(lambda x: rep_dict[x.group()],reason)
-		    except Exception as e:
-			raise Exception(e)
+            actions = res["actions"]
+            totalCount = getAction(actions, "totalCount") or 0
+            failCount  = getAction(actions, "failCount") or 0
+            skipCount  = getAction(actions, "skipCount") or 0
+            doc["claim"] = getClaimReason(actions)
+            if totalCount == 0:
+                if lastTotalCount == -1:
+                    continue # no tests ever passed for this build
                 else:
-                    doc["claim"] = ""
-                if totalCount == 0:
-                    if lastTotalCount == -1:
-                        continue # no tests ever passed for this build
-                    else:
-                        totalCount = lastTotalCount
-                        failCount = totalCount
-                else:
-                    lastTotalCount = totalCount
-
-                doc["failCount"] = failCount
-                doc["totalCount"] = totalCount - skipCount
-                params = getAction(actions, "parameters")
-                if params is None:
-                    doc["priority"] = P1
-                    doc["build"] = DEFAULT_BUILD
-                else:
-                    doc["build"] = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  DEFAULT_BUILD
-                    doc["priority"] = getAction(params, "name", "priority") or P1
-                    if doc["priority"].upper() not in [P0, P1, P2]:
-                        doc["priority"] = P1
-                doc["build"] = doc["build"].replace("-rel","").split(",")[0]
-                try:
-                    _build= doc["build"].split("-")
-                    rel, bno = _build[0], _build[1]
-                    # check partial rel #'s
-                    rlen = len(rel.split("."))
-                    while rlen < 3:
-                        rel = rel+".0"
-                        rlen+=1
-
-                    # verify rel, build
-                    m=re.match("^\d\.\d\.\d{1,5}", rel)
-                    if m is None:
-                        print "unsupported version_number: "+doc["build"]
-                        continue
-                    m=re.match("^\d{1,10}", bno)
-                    if m is None:
-                        print "unsupported version_number: "+doc["build"]
-                        continue
-
-                    doc["build"] = "%s-%s" % (rel, bno.zfill(4))
-                except:
-                    print "unsupported version_number: "+doc["build"]
-                    continue
-
+                    totalCount = lastTotalCount
+                    failCount = totalCount
             else:
-                # use date as version for sdk and mobile
-                if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                    continue
+                lastTotalCount = totalCount
 
-                actions = res["actions"]
-                totalCount = getAction(actions, "totalCount") or 0
-                failCount  = getAction(actions, "failCount") or 0
-                skipCount  = getAction(actions, "skipCount") or 0
-                if totalCount == 0:
-                    if lastTotalCount == -1:
-                        continue # no tests ever passed for this build
-                    else:
-                        totalCount = lastTotalCount
-                        failCount = totalCount
-                else:
-                    lastTotalCount = totalCount
+            doc["failCount"] = failCount
+            doc["totalCount"] = totalCount - skipCount
+            params = getAction(actions, "parameters")
 
-                doc["failCount"] = failCount
-                doc["totalCount"] = totalCount - skipCount
-                doc["priority"] =  P0
-
-                ts =  res["timestamp"]/1000;
-                month = int(datetime.datetime.fromtimestamp(ts).strftime("%m"))
-                _ts = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m%d")
-                yr, md = _ts.split("-")
-                doc["build"] = "%s-%s%s" % (MOBILE_VERSION, yr[-1], md)
-
+            if bucket == "server":
+                doc["build"], doc["priority"] = getBuildAndPriority(params)
+            else:
+                doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
             if doc["build"] in buildHist:
 
@@ -277,4 +267,5 @@ def poll(view):
 
 if __name__ == "__main__":
     for view in VIEWS:
+        JOBS = {}
         poll(view)

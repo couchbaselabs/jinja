@@ -49,7 +49,7 @@ SERVER_FEATURES = [
     "UNIT-UNIT"
 ]
 MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
-                   "CBLITE-CBLITE",
+                   "UPGR-UPGRADE",
                    "SANITY-SANITY",
                    "BUILD-BUILD",
                    "UNIT-UNIT"]
@@ -69,7 +69,7 @@ SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchb
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
-MOBILE_VIEW = {"urls" : [ "http://mobile.jenkins.couchbase.com/"],
+MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net/", "http://mobile.jenkins.couchbase.com/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
@@ -80,6 +80,7 @@ SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.cou
 
 VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW]
 
+
 ## misc
 DEFAULT_BUILD = "0.0.0-xxxx"
 EXCLUDED = []
@@ -87,6 +88,4 @@ EXCLUDED = []
 P0 = "P0"
 P1 = "P1"
 P2 = "P2"
-JOBS = {}
-
 
