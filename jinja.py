@@ -54,7 +54,7 @@ def getBuildAndPriority(params, isMobile = False):
 
     if params:
         if not isMobile:
-            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  DEFAULT_BUILD
+            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  getAction(params, "name", "build") or DEFAULT_BUILD
         else:
             build = getAction(params, "name", "CBL_iOS_Build")
 
@@ -218,7 +218,6 @@ def poll(view):
         for job in j["jobs"]:
             doc = {}
             doc["name"] = job["name"]
-
             if job["name"] in JOBS:
                 # already processed
                 continue
