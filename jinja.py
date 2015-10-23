@@ -250,7 +250,7 @@ def getOsComponent(name, view):
                 _os = os
 
     if _os is None:
-        print "warn: job name has unrecognized os: %s" %  (name)
+        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
 
     for comp in FEATURES:
         tag, _c = comp.split("-")
@@ -261,7 +261,7 @@ def getOsComponent(name, view):
             break
 
     if _comp is None:
-        print "warn: job name has unrecognized component: %s" %  (name)
+        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
 
     return _os, _comp
 
