@@ -190,8 +190,8 @@ def storeJob(jobDoc, view, first_pass = True):
             else:
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
-            if bid == 193:
-                xyz="xyz"
+            if not doc.get("build"):
+                continue
 
             if doc["build"] in buildHist:
 
