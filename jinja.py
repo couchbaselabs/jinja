@@ -107,7 +107,9 @@ def getClaimReason(actions):
 
     return reason
 
-def storeJob(jobDoc, bucket, first_pass = True):
+def storeJob(jobDoc, view, first_pass = True):
+
+    bucket = view["bucket"]
 
     client = McdClient(HOST, PORT)
     client.sasl_auth_plain(bucket, "")
@@ -128,7 +130,9 @@ def storeJob(jobDoc, bucket, first_pass = True):
         lastTotalCount = -1
 
         for bid in bids:
-            if bid in JOBS[doc["name"]]:
+
+            oldName = JOBS.get(doc["name"])
+            if oldName and bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
                 if first_pass == False:
@@ -165,11 +169,29 @@ def storeJob(jobDoc, bucket, first_pass = True):
             doc["failCount"] = failCount
             doc["totalCount"] = totalCount - skipCount
             params = getAction(actions, "parameters")
+            componentParam = getAction(params, "name", "component")
+            if componentParam:
+                componentParam = getAction(params, "name", "component")
+                subComponentParam = getAction(params, "name", "subcomponent")
+                osParam = getAction(params, "name", "OS") or getAction(params, "name", "os")
+                if not componentParam or not subComponentParam or not osParam:
+                    continue
+
+                pseudoName = str(osParam+"-"+componentParam+"_"+subComponentParam)
+                _os, _comp = getOsComponent(pseudoName, view)
+                if not _os or not _comp:
+                    continue # unkown os or comp
+                doc["os"] = _os
+                doc["component"] = _comp
+                doc["name"] = pseudoName
 
             if bucket == "server":
                 doc["build"], doc["priority"] = getBuildAndPriority(params)
             else:
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
+
+            if bid == 193:
+                xyz="xyz"
 
             if doc["build"] in buildHist:
 
@@ -192,10 +214,11 @@ def storeJob(jobDoc, bucket, first_pass = True):
             key = "%s-%s" % (doc["name"], doc["build_id"])
             key = hashlib.md5(key).hexdigest()
             val = json.dumps(doc)
+
             try:
-                #print val
                 client.set(key, 0, 0, val, 0)
-                buildHist[doc["build"]] = doc["build_id"]
+                histKey = doc["name"]+"-"+doc["build"]
+                buildHist[histKey] = doc["build_id"]
             except:
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
@@ -203,10 +226,46 @@ def storeJob(jobDoc, bucket, first_pass = True):
     if first_pass:
         storeJob(jobDoc, bucket, first_pass = False)
 
-def poll(view):
+def getOsComponent(name, view):
+    _os = _comp = None
 
     PLATFORMS = view["platforms"]
     FEATURES = view["features"]
+
+    for os in PLATFORMS:
+        if os in name.upper():
+            _os = os
+
+    if _os is None:
+
+        # attempt partial name lookup
+        for os in PLATFORMS:
+            if os[:3] == name.upper()[:3]:
+                _os = os
+
+    if _os is None and view["bucket"] != "mobile":
+        # attempt initial name lookup
+        for os in PLATFORMS:
+            if os[:1] == name.upper()[:1]:
+                _os = os
+
+    if _os is None:
+        print "warn: job name has unrecognized os: %s" %  (name)
+
+    for comp in FEATURES:
+        tag, _c = comp.split("-")
+        docname = name.upper()
+        docname = docname.replace("-","_")
+        if tag in docname:
+            _comp = _c
+            break
+
+    if _comp is None:
+        print "warn: job name has unrecognized component: %s" %  (name)
+
+    return _os, _comp
+
+def poll(view):
 
     for url in view["urls"]:
         res = getJS(url, {"depth" : 0, "tree" : "jobs[name,url]"})
@@ -222,45 +281,19 @@ def poll(view):
                 # already processed
                 continue
 
-            for os in PLATFORMS:
-                if os in doc["name"].upper():
-                    doc["os"] = os
 
-            if "os" not in doc:
-
-                # attempt partial name lookup
-                for os in PLATFORMS:
-                    if os[:3] == doc["name"].upper()[:3]:
-                        doc["os"] = os
-
-            if "os" not in doc and view["bucket"] != "mobile":
-                # attempt initial name lookup
-                for os in PLATFORMS:
-                    if os[:1] == doc["name"].upper()[:1]:
-                        doc["os"] = os
-
-            if "os" not in doc:
-                print "%s: job name has unrecognized os: %s" %  (view["bucket"], doc["name"])
-                continue
-
-            for comp in FEATURES:
-                tag, _c = comp.split("-")
-                docname = doc["name"].upper()
-                docname = docname.replace("-","_")
-                if tag in docname:
-                    doc["component"] = _c
-                    break
-
-            if "component" not in doc:
-                print "%s: job name has unrecognized component: %s" %  (view["bucket"], doc["name"])
-                continue
-
+            os, comp = getOsComponent(doc["name"], view)
+            if not os or not comp:
+                if job["name"] != "test_suite_executor":
+                    continue
 
             JOBS[job["name"]] = []
+            doc["os"] = os
+            doc["component"] = comp
             doc["url"] = job["url"]
 
             try:
-                storeJob(doc, view["bucket"])
+                storeJob(doc, view)
             except:
                 pass
 
