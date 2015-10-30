@@ -1,8 +1,8 @@
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL"]
-MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET"]
+MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET", "SYNCGATEWAY"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
-MOBILE_VERSION = "1.1"
+MOBILE_VERSION = ["1.1.0", "1.2.0"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
@@ -71,7 +71,7 @@ SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchb
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
-MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net/", "http://mobile.jenkins.couchbase.com/"],
+MOBILE_VIEW = {"urls" : ["http://qa.hq.northscale.net/", "http://qa.sc.couchbase.com/", "http://mobile.jenkins.couchbase.com/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
