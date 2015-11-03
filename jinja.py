@@ -224,7 +224,7 @@ def storeJob(jobDoc, view, first_pass = True):
 
 
     if first_pass:
-        storeJob(jobDoc, bucket, first_pass = False)
+        storeJob(jobDoc, view, first_pass = False)
 
 def getOsComponent(name, view):
     _os = _comp = None
