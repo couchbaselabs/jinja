@@ -107,7 +107,7 @@ def getClaimReason(actions):
 
     return reason
 
-def storeJob(jobDoc, view, first_pass = True):
+def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
 
@@ -127,7 +127,8 @@ def storeJob(jobDoc, view, first_pass = True):
 
         bids = [b["number"] for b in res["builds"]]
 
-        lastTotalCount = -1
+        if first_pass:
+            bids.reverse()  # bottom to top 1st pass
 
         for bid in bids:
 
@@ -194,7 +195,7 @@ def storeJob(jobDoc, view, first_pass = True):
                 continue
 
             histKey = doc["name"]+"-"+doc["build"]
-            if histKey in buildHist:
+            if not first_pass and histKey in buildHist:
 
                 #print "REJECTED- doc already in build results: %s" % doc
                 #print buildHist
@@ -205,7 +206,7 @@ def storeJob(jobDoc, view, first_pass = True):
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
                     client.delete(oldKey, vbucket = 0)
-                    #print "DELETED- %s:%s" % (doc["build"],doc["build_id"])
+                    #print "DELETED- %d:%s" % (bid, histKey)
                 except:
                     pass
 
@@ -218,14 +219,13 @@ def storeJob(jobDoc, view, first_pass = True):
 
             try:
                 client.set(key, 0, 0, val, 0)
-                histKey = doc["name"]+"-"+doc["build"]
                 buildHist[histKey] = doc["build_id"]
             except:
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
 
 
     if first_pass:
-        storeJob(jobDoc, view, first_pass = False)
+        storeJob(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
 
 def getOsComponent(name, view):
     _os = _comp = None
@@ -281,7 +281,6 @@ def poll(view):
             if job["name"] in JOBS:
                 # already processed
                 continue
-
 
             os, comp = getOsComponent(doc["name"], view)
             if not os or not comp:
