@@ -193,7 +193,8 @@ def storeJob(jobDoc, view, first_pass = True):
             if not doc.get("build"):
                 continue
 
-            if doc["build"] in buildHist:
+            histKey = doc["name"]+"-"+doc["build"]
+            if histKey in buildHist:
 
                 #print "REJECTED- doc already in build results: %s" % doc
                 #print buildHist
