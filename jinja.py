@@ -122,6 +122,10 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
     if res is None:
         return
 
+    # operate as 2nd pass if test_executor
+    if jobDoc["name"] == "test_suite_executor":
+        first_pass = False
+
     buildHist = {}
     if res["lastBuild"]:
 
@@ -136,7 +140,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
             if oldName and bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
-                if first_pass == False:
+                if oldName and first_pass == False:
                     JOBS[doc["name"]].append(bid)
 
             doc["build_id"] = bid
