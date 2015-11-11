@@ -6,7 +6,7 @@ import os
 import requests
 import hashlib
 import json
-from mc_bin_client import MemcachedClient as McdClient
+from couchbase.bucket import Bucket
 from constants import *
 
 JOBS = {}
@@ -111,8 +111,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
 
-    client = McdClient(HOST, PORT)
-    client.sasl_auth_plain(bucket, "")
+    client = Bucket('couchbase://localhost/'+bucket)
 
     doc = jobDoc
     url = doc["url"]
@@ -209,7 +208,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
                 try:
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
-                    client.delete(oldKey, vbucket = 0)
+                    client.remove(oldKey)
                     #print "DELETED- %d:%s" % (bid, histKey)
                 except:
                     pass
@@ -219,10 +218,9 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
             key = "%s-%s" % (doc["name"], doc["build_id"])
             key = hashlib.md5(key).hexdigest()
-            val = json.dumps(doc)
 
             try:
-                client.set(key, 0, 0, val, 0)
+                client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
             except:
                 print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
