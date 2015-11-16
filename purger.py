@@ -66,6 +66,10 @@ def purge(bucket, known_jobs):
             cnt = val[5]
             bid = val[6]
 
+            if url.find("test_suite_executor") > -1:
+                # no purging on executor
+                continue
+
             # if job is unkown try to manually get url
             if name not in known_jobs:
                 url = val[3]
