@@ -132,7 +132,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
         for bid in bids:
 
-            oldName = JOBS.get(doc["name"])
+            oldName = JOBS.get(doc["name"]) is not None
             if oldName and bid in JOBS[doc["name"]]:
                 continue # job already stored
             else:
