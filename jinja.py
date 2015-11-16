@@ -239,12 +239,8 @@ def storeBuild(client, run, name, view):
     if not job:
         print "No job info for build"
         return
-
-    # get name and component from full Displayname
-    os = job["fullDisplayName"].split()[2].split(",")[0]
-    name=os+"_"+name
-    os, comp = getOsComponent(name, view)
-    if not os or not comp:
+    result = job.get("result")
+    if not result:
         return
 
     actions = job["actions"]
@@ -252,14 +248,29 @@ def storeBuild(client, run, name, view):
     failCount  = getAction(actions, "failCount") or 0
     skipCount  = getAction(actions, "skipCount") or 0
 
+    if totalCount == 0:
+        return
+
     params = getAction(actions, "parameters")
+    os = getAction(params, "name", "DISTRO") or job["fullDisplayName"].split()[2].split(",")[0]
     version = getAction(params, "name", "VERSION")
-    build = getAction(params, "name", "CURRENT_BUILD_NUMBER")
+    build = getAction(params, "name", "CURRENT_BUILD_NUMBER") or getAction(params, "name", "BLD_NUM")
+
+    name=os+"_"+name
+    if getAction(params, "name", "UNIT_TEST"):
+        name += "_unit"
+
+    os, comp = getOsComponent(name, view)
+    if not os or not comp:
+        return
+
 
     if not (version or build):
         return
 
     build = version+"-"+build
+
+    duration = int(job["duration"]) or 0
 
     # lookup pass count fail count version
     doc = {
@@ -270,8 +281,8 @@ def storeBuild(client, run, name, view):
       "component": comp,
       "failCount": failCount,
       "totalCount": totalCount,
-      "result": job["result"],
-      "duration": int(job["duration"]),
+      "result": result,
+      "duration": duration,
       "priority": "P0",
       "os": os,
       "build": build
@@ -306,15 +317,17 @@ def pollBuild(view):
                 continue
 
             j = res.json()
-
-            # each run is a result
-            for doc in j["runs"]:
-                try:
-                    storeBuild(client, doc, name, view)
-                except Exception as ex:
-                    print ex
-                    pass
-
+            try:
+                if not j:
+                    # single run job
+                    storeBuild(client, job, name, view)
+                else:
+                    # each run is a result
+                    for doc in j["runs"]:
+                        storeBuild(client, doc, name, view)
+            except Exception as ex:
+                print ex
+                pass
 
 
 def getOsComponent(name, view):
