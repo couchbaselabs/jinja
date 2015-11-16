@@ -65,6 +65,8 @@ SDK_FEATURES = [
     "CLIENT-CLIENT"
 ]
 
+BUILD_FEATURES = ["SANITY-BUILD_SANITY"]
+
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
@@ -80,8 +82,12 @@ SDK_VIEW    = {"urls" : ["http://sdkbuilds.couchbase.com", "http://sdkbuilds.cou
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}
+BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/"],
+              "platforms": SERVER_PLATFORMS,
+              "features": BUILD_FEATURES,
+              "bucket": "build"}
 
-VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW]
+VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW, BUILD_VIEW]
 
 
 ## misc

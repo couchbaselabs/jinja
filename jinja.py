@@ -107,7 +107,7 @@ def getClaimReason(actions):
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
-def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
+def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
 
@@ -227,7 +227,95 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
 
     if first_pass:
-        storeJob(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
+        storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
+
+
+def storeBuild(client, run, name, view):
+    res = getJS(run["url"], {"depth" : 0})
+    if not res:
+        return
+
+    job = res.json()
+    if not job:
+        print "No job info for build"
+        return
+
+    # get name and component from full Displayname
+    os = job["fullDisplayName"].split()[2].split(",")[0]
+    name=os+"_"+name
+    os, comp = getOsComponent(name, view)
+    if not os or not comp:
+        return
+
+    actions = job["actions"]
+    totalCount = getAction(actions, "totalCount") or 0
+    failCount  = getAction(actions, "failCount") or 0
+    skipCount  = getAction(actions, "skipCount") or 0
+
+    params = getAction(actions, "parameters")
+    version = getAction(params, "name", "VERSION")
+    build = getAction(params, "name", "CURRENT_BUILD_NUMBER")
+
+    if not (version or build):
+        return
+
+    build = version+"-"+build
+
+    # lookup pass count fail count version
+    doc = {
+      "build_id": int(job["id"]),
+      "claim": "",
+      "name": name,
+      "url": run["url"],
+      "component": comp,
+      "failCount": failCount,
+      "totalCount": totalCount,
+      "result": job["result"],
+      "duration": int(job["duration"]),
+      "priority": "P0",
+      "os": os,
+      "build": build
+    }
+
+    key = "%s-%s" % (doc["name"], doc["build_id"])
+    print key+","+build
+    key = hashlib.md5(key).hexdigest()
+
+    try:
+        client.upsert(key, doc)
+    except Exception as ex:
+        print "set failed, couchbase down?: %s %s"  % (HOST, ex)
+
+def pollBuild(view):
+
+    client = Bucket(HOST+'/server') # using server bucket (for now)
+
+    for url in view["urls"]:
+
+        res = getJS(url, {"depth" : 0})
+        if res is None:
+            continue
+
+        j = res.json()
+        name = j["name"]
+        for job in j["builds"]:
+            build_url = job["url"]
+
+            res = getJS(build_url, {"depth" : 0, "tree":"runs[url,number]"})
+            if res is None:
+                continue
+
+            j = res.json()
+
+            # each run is a result
+            for doc in j["runs"]:
+                try:
+                    storeBuild(client, doc, name, view)
+                except Exception as ex:
+                    print ex
+                    pass
+
+
 
 def getOsComponent(name, view):
     _os = _comp = None
@@ -268,15 +356,16 @@ def getOsComponent(name, view):
 
     return _os, _comp
 
-def poll(view):
+def pollTest(view):
 
     for url in view["urls"]:
-        res = getJS(url, {"depth" : 0, "tree" : "jobs[name,url]"})
+
+        res = getJS(url, {"depth" : 0, "tree" :"jobs[name,url]"})
         if res is None:
             continue
 
-        j = res.json()
 
+        j = res.json()
         for job in j["jobs"]:
             doc = {}
             doc["name"] = job["name"]
@@ -296,11 +385,15 @@ def poll(view):
             doc["url"] = job["url"]
 
             try:
-                storeJob(doc, view)
+                storeTest(doc, view)
             except:
                 pass
+
 
 if __name__ == "__main__":
     for view in VIEWS:
         JOBS = {}
-        poll(view)
+        if view["bucket"] == "build":
+            pollBuild(view)
+        else:
+            pollTest(view)
