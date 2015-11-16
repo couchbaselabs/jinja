@@ -1,11 +1,10 @@
 import time
 import requests
-from mc_bin_client import MemcachedClient as McdClient
+from couchbase.bucket import Bucket
 
 BUCKETS=['server', 'mobile', 'sdk']
-MC_HOST="127.0.0.1"
-MC_PORT=11210
-VIEW_API="http://172.23.121.132:8092/"
+HOST = 'couchbase://127.0.0.1'
+VIEW_API="http://10.0.0.18:8092/"
 JENKINS_URLS=["http://qa.sc.couchbase.com/",
              "http://qa.hq.northscale.net/",
              "http://ci.sc.couchbase.com/",
@@ -16,9 +15,6 @@ JENKINS_URLS=["http://qa.sc.couchbase.com/",
              "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/",
              "http://sdkbuilds.couchbase.com/view/.NET/",
              "http://qa.sc.couchbase.com/view/extended/"]
-client = McdClient(MC_HOST, MC_PORT)
-
-
 def queryJenkinsJobs():
     _JOBS = []
 
@@ -38,28 +34,12 @@ def queryJenkinsJobs():
 def purge(bucket, known_jobs):
 
 
-    client.sasl_auth_plain(bucket, "")
+    client = Bucket(HOST+'/'+bucket)
+
     DDOC='/'.join([VIEW_API,bucket,'_design',bucket,'_view'])
-    PLATFORMS_Q=DDOC+"/all_platforms?stale=false&group_level=1&inclusive_end=true&reduce=true"
-    COMPONENTS_Q=DDOC+"/all_components?full_set=true&group_level=1&inclusive_end=true&reduce=true&stale=false"
     BUILDS_Q = DDOC+"/data_by_build?full_set=true&group_level=1&inclusive_end=true&reduce=true&stale=false"
     ALL_PLATFORMS = []
     ALL_COMPONENTS = []
-
-    # all platforms
-    r = requests.get(PLATFORMS_Q)
-    data = r.json()
-    for row in data['rows']:
-        platform = row['key']
-        ALL_PLATFORMS.append(platform)
-
-    # all components
-    r = requests.get(COMPONENTS_Q)
-    data = r.json()
-    for row in data['rows']:
-        component = row['key']
-        ALL_COMPONENTS.append(component)
-
 
     # purger for all platforms+comonent combo of each build
     r = requests.get(BUILDS_Q)
@@ -92,7 +72,7 @@ def purge(bucket, known_jobs):
                 r = requests.get(url)
                 if r.status_code == 404:
                     print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
-                    client.delete(_id, vbucket=0)
+                    client.remove(_id)
                     continue
 
             if os in JOBS:
@@ -104,11 +84,11 @@ def purge(bucket, known_jobs):
                         oldDocId = match[0][1][2]
                         if oldBid > bid:
                            # purge this docId because it is less this saved bid
-                           client.delete(_id, vbucket=0)
+                           client.remove(_id)
                            print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
                         else:
                            # purge old docId
-                           client.delete(oldDocId, vbucket=0)
+                           client.remove(_id)
 
                            # use this bid as new tracker
                            JOBS[os][comp][idx] = (name, bid, _id)
