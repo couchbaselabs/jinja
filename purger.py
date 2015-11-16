@@ -4,7 +4,7 @@ from couchbase.bucket import Bucket
 
 BUCKETS=['server', 'mobile', 'sdk']
 HOST = 'couchbase://127.0.0.1'
-VIEW_API="http://10.0.0.18:8092/"
+VIEW_API="http://127.0.0.1:8092/"
 JENKINS_URLS=["http://qa.sc.couchbase.com/",
              "http://qa.hq.northscale.net/",
              "http://ci.sc.couchbase.com/",
@@ -69,6 +69,8 @@ def purge(bucket, known_jobs):
             if url.find("test_suite_executor") > -1:
                 # no purging on executor
                 continue
+
+            print "Process: %s" % (name)
 
             # if job is unkown try to manually get url
             if name not in known_jobs:
