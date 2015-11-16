@@ -11,10 +11,7 @@ from constants import *
 
 JOBS = {}
 
-HOST =  "127.0.0.1"
-PORT = 11210
-if os.environ.get('MC_PORT'):
-    PORT = int(os.environ.get('MC_PORT'))
+HOST = 'couchbase://127.0.0.1'
 
 def getJS(url, params = None):
     res = None
@@ -111,7 +108,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
 
-    client = Bucket('couchbase://localhost/'+bucket)
+    client = Bucket(HOST+'/'+bucket)
 
     doc = jobDoc
     url = doc["url"]
@@ -223,7 +220,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
                 client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
             except:
-                print "set failed, couchbase down?: %s:%s"  % (HOST,PORT)
+                print "set failed, couchbase down?: %s"  % (HOST)
 
 
     if first_pass:
