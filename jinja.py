@@ -104,6 +104,9 @@ def getClaimReason(actions):
 
     return reason
 
+def isExecutor(name):
+    return name.find("test_suite_executor") > -1
+
 def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
@@ -119,7 +122,7 @@ def storeJob(jobDoc, view, first_pass = True, lastTotalCount = -1):
         return
 
     # operate as 2nd pass if test_executor
-    if jobDoc["name"] == "test_suite_executor":
+    if isExecutor(doc["name"]):
         first_pass = False
 
     buildHist = {}
@@ -283,7 +286,8 @@ def poll(view):
 
             os, comp = getOsComponent(doc["name"], view)
             if not os or not comp:
-                if job["name"] != "test_suite_executor":
+                if not isExecutor(job["name"]):
+                    # does not match os or comp and is not executor
                     continue
 
             JOBS[job["name"]] = []
