@@ -6,6 +6,7 @@ MOBILE_VERSION = ["1.1.0", "1.2.0"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "SUBDOC-SUBDOC",
     "FTS-FTS",
     "SYSTEST-SYSTEST",
     "SYSTEM-SYSTEST",
