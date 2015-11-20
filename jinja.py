@@ -14,6 +14,7 @@ JOBS = {}
 HOST = 'couchbase://127.0.0.1'
 
 def getJS(url, params = None):
+    print url
     res = None
     try:
         res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=3)
@@ -107,6 +108,25 @@ def getClaimReason(actions):
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
+def isDisabled(job):
+    status = job.get("color")
+    return  status and (status == "disabled")
+
+def purgeDisabled(job, bucket):
+    client = Bucket(HOST+'/'+bucket)
+    name = job["name"]
+    for b in job["builds"]:
+        # reconstruct doc id
+        bid = b["number"]
+        oldKey = "%s-%s" % (name, bid)
+        oldKey = hashlib.md5(oldKey).hexdigest()
+        # purge
+        try:
+            client.remove(oldKey)
+        except Exception as ex:
+            print "[WARN] did not find disabled job to delete: [%s-%s]" % (name,bid)
+            pass # delete ok
+
 def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
     bucket = view["bucket"]
@@ -119,6 +139,11 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
     res = getJS(url, {"depth" : 0}).json()
 
     if res is None:
+        return
+
+    # do not process disabled jobs
+    if isDisabled(doc):
+        purgeDisabled(res, bucket)
         return
 
     # operate as 2nd pass if test_executor
@@ -373,7 +398,7 @@ def pollTest(view):
 
     for url in view["urls"]:
 
-        res = getJS(url, {"depth" : 0, "tree" :"jobs[name,url]"})
+        res = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
         if res is None:
             continue
 
@@ -396,6 +421,7 @@ def pollTest(view):
             doc["os"] = os
             doc["component"] = comp
             doc["url"] = job["url"]
+            doc["color"] = job.get("color")
 
             try:
                 storeTest(doc, view)
