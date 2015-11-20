@@ -222,6 +222,10 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
             if not doc.get("build"):
                 continue
 
+            # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
+            if (doc["build"] >= "4.0.1") and (doc["component"] == "XDCR"):
+                doc["component"] = "GOXDCR"
+
             histKey = doc["name"]+"-"+doc["build"]
             if not first_pass and histKey in buildHist:
 
