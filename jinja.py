@@ -115,9 +115,10 @@ def isDisabled(job):
 def purgeDisabled(job, bucket):
     client = Bucket(HOST+'/'+bucket)
     name = job["name"]
-    for b in job["builds"]:
+    bids = [b["number"] for b in job["builds"]]
+    high_bid = bids[0]
+    for bid in xrange(high_bid):
         # reconstruct doc id
-        bid = b["number"]
         oldKey = "%s-%s" % (name, bid)
         oldKey = hashlib.md5(oldKey).hexdigest()
         # purge
