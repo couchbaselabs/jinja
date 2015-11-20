@@ -63,6 +63,7 @@ def purge(bucket, known_jobs):
             name = val[0]
             os = val[1]
             comp = val[2]
+            url = val[3]
             cnt = val[5]
             bid = val[6]
 
@@ -74,7 +75,6 @@ def purge(bucket, known_jobs):
 
             # if job is unkown try to manually get url
             if name not in known_jobs:
-                url = val[3]
                 r = requests.get(url)
                 if r.status_code == 404:
                     print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
