@@ -105,6 +105,26 @@ def getClaimReason(actions):
 
     return reason
 
+# use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
+def caveat_swap_xdcr(doc):
+    comp = doc["component"]
+    if (doc["build"] >= "4.0.1") and (comp == "XDCR"):
+        comp = "GOXDCR"
+    return comp
+
+# when build > 4.1.0 and os is WIN skip VIEW, TUNEABLE, 2I, NSERV, VIEW, EP
+def caveat_should_skip_win(doc):
+    skip = False
+    os = doc["os"]
+    comp = doc["component"]
+    build = doc["build"]
+    if build >= "4.1.0" and os  == "WIN" and\
+        (comp == "VIEW" or comp=="TUNABLE" or comp =="2I" or\
+         comp == "NSERV" or comp=="VIEW" or comp=="EP"):
+        if doc["name"].lower().find("w01") == 0:
+            skip = True
+    return skip
+
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
@@ -223,9 +243,10 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
             if not doc.get("build"):
                 continue
 
-            # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
-            if (doc["build"] >= "4.0.1") and (doc["component"] == "XDCR"):
-                doc["component"] = "GOXDCR"
+            # run special caveats on collector
+            doc["component"] = caveat_swap_xdcr(doc)
+            if caveat_should_skip_win(doc):
+                continue
 
             histKey = doc["name"]+"-"+doc["build"]
             if not first_pass and histKey in buildHist:
