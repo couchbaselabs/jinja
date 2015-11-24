@@ -24,7 +24,7 @@ def queryJenkinsJobs():
         if r.status_code == 200:
             data = r.json()
             jobs = data.get("jobs")
-            job_names = [str(n['name']) for n in jobs]
+            job_names = [str(j['url']) for j in jobs]
             _JOBS.extend(job_names)
         else:
             "ERROR Jenkins url: (%s, %s)" % (r.status_code, url)
@@ -73,8 +73,8 @@ def purge(bucket, known_jobs):
 
             print "Process: %s" % (name)
 
-            # if job is unkown try to manually get url
-            if name not in known_jobs:
+            # if job is unknown try to manually get url
+            if url not in known_jobs:
                 r = requests.get(url)
                 if r.status_code == 404:
                     print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
