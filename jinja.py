@@ -60,9 +60,15 @@ def getBuildAndPriority(params, isMobile = False):
         if priority.upper() not in [P0, P1, P2]:
             priority = P1
 
+    if build is None:
+        return None, None
+
     build = build.replace("-rel","").split(",")[0]
     try:
         _build = build.split("-")
+        if len(_build) == 1:
+            raise Exception("Invalid Build number: {} Should follow 1.1.1-0000 naming".format(_build))
+
         rel, bno = _build[0], _build[1]
         # check partial rel #'s
         rlen = len(rel.split("."))
@@ -82,7 +88,7 @@ def getBuildAndPriority(params, isMobile = False):
 
         build = "%s-%s" % (rel, bno.zfill(4))
     except:
-        print "unsupported version_number: "+doc["build"]
+        print "unsupported version_number: " + build
         return None, None
 
     return build, priority
