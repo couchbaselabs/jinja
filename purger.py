@@ -94,7 +94,7 @@ def purge(bucket, known_jobs):
                            print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
                         else:
                            # purge old docId
-                           client.remove(_id)
+                           client.remove(oldDocId)
 
                            # use this bid as new tracker
                            JOBS[os][comp][idx] = (name, bid, _id)
