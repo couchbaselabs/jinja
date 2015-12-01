@@ -93,12 +93,17 @@ def purge(bucket, known_jobs):
                            client.remove(_id)
                            print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
                         else:
-                           # purge old docId
-                           client.remove(oldDocId)
+                           # bid must exist in prior to purge replace
+                           if requests.get(url+"/"+str(bid)).status_code == 404:
+                             # delete this newer bid as it no longer exists
+                             client.remove(_id)
+                           else:
+                             # purge old docId
+                             client.remove(oldDocId)
 
-                           # use this bid as new tracker
-                           JOBS[os][comp][idx] = (name, bid, _id)
-                           print "****PURGE-REPLACE*** %s_%s: %s:%s:%s (%s,%s > %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
+                             # use this bid as new tracker
+                             JOBS[os][comp][idx] = (name, bid, _id)
+                             print "****PURGE-REPLACE*** %s_%s: %s:%s:%s (%s,%s > %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
 
                         continue
                     else:
