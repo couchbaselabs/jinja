@@ -325,7 +325,7 @@ def storeBuild(client, run, name, view):
     if not (version or build):
         return
 
-    build = version+"-"+build
+    build = version+"-"+build.zfill(4)
 
     duration = int(job["duration"]) or 0
 
@@ -462,7 +462,7 @@ def pollTest(view):
 
 
 if __name__ == "__main__":
-    for view in VIEWS:
+    for view in [SERVER_VIEW]:
         JOBS = {}
         if view["bucket"] == "build":
             pollBuild(view)
