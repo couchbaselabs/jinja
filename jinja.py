@@ -363,7 +363,11 @@ def storeBuild(client, run, name, view):
     key = hashlib.md5(key).hexdigest()
 
     try:
-        client.upsert(key, doc)
+        if version == "4.1.0":
+            # not tracking, remove and ignore
+            client.remove(key)
+        else:
+            client.upsert(key, doc)
     except Exception as ex:
         print "set failed, couchbase down?: %s %s"  % (HOST, ex)
 
