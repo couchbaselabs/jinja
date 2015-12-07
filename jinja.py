@@ -462,7 +462,7 @@ def pollTest(view):
 
 
 if __name__ == "__main__":
-    for view in [SERVER_VIEW]:
+    for view in VIEWS:
         JOBS = {}
         if view["bucket"] == "build":
             pollBuild(view)
