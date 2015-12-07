@@ -131,6 +131,18 @@ def caveat_should_skip_win(doc):
             skip = True
     return skip
 
+# when build == 4.1.0 version then skip backup_recovery
+def caveat_should_skip_backup_recovery(doc):
+   skip = False
+   if (doc["build"].find("4.1.0") == 0) and\
+      (doc["component"] == "BACKUP_RECOVERY"):
+       skip = True
+   return skip
+
+def caveat_should_skip(doc):
+   return caveat_should_skip_win(doc) or\
+          caveat_should_skip_backup_recovery(doc)
+
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
@@ -252,7 +264,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
             # run special caveats on collector
             doc["component"] = caveat_swap_xdcr(doc)
-            if caveat_should_skip_win(doc):
+            if caveat_should_skip(doc):
                 continue
 
             histKey = doc["name"]+"-"+doc["build"]
