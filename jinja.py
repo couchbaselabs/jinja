@@ -10,14 +10,21 @@ from couchbase.bucket import Bucket
 from constants import *
 
 JOBS = {}
-
+CACHE = {}
 HOST = '127.0.0.1'
 
-def getJS(url, params = None):
+def getJS(url, params = None, cache_ok = False):
     print url
     res = None
+
+    if cache_ok and url in CACHE:
+        return CACHE[url]
     try:
         res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=3)
+        data = res.json()
+        if cache_ok:
+            CACHE[url] = data
+        return data
     except:
         print "[Error] url unreachable: %s" % url
         pass
@@ -176,7 +183,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
     doc = jobDoc
     url = doc["url"]
 
-    res = getJS(url, {"depth" : 0}).json()
+    res = getJS(url, {"depth" : 0})
 
     if res is None:
         return
@@ -208,7 +215,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
                     JOBS[doc["name"]].append(bid)
 
             doc["build_id"] = bid
-            res = getJS(url+str(bid), {"depth" : 0}).json()
+            res = getJS(url+str(bid), {"depth" : 0})
             if res is None:
                 return
 
@@ -310,28 +317,18 @@ def getBuildInfo(url, causes):
     if upstreamId and upstreamUrl:
         parentUrl = url.split("job")[0]
         parentUrl = "/".join([parentUrl, upstreamUrl, str(upstreamId)])
-        res = getJS(parentUrl)
-        if not res:
-            return
-        parentJob = res.json()
+        parentJob = getJS(parentUrl, cache_ok=True)
         if parentJob:
             actions = parentJob["actions"]
             causes = getAction(actions, "causes")
             return getBuildInfo(parentJob["url"], causes)
     else:
         # assuming root build with no cause
-        res = getJS(url)
-        if not res:
-            return
-        buildInfo = res.json()
+        buildInfo = getJS(url, cache_ok=True)
         return buildInfo
 
 def storeBuild(client, run, name, view):
-    res = getJS(run["url"], {"depth" : 0})
-    if not res:
-        return
-
-    job = res.json()
+    job = getJS(run["url"], {"depth" : 0})
     if not job:
         print "No job info for build"
         return
@@ -409,20 +406,18 @@ def pollBuild(view):
 
     for url in view["urls"]:
 
-        res = getJS(url, {"depth" : 0})
-        if res is None:
+        j = getJS(url, {"depth" : 0})
+        if j is None:
             continue
 
-        j = res.json()
         name = j["name"]
         for job in j["builds"]:
             build_url = job["url"]
 
-            res = getJS(build_url, {"depth" : 0, "tree":"runs[url,number]"})
-            if res is None:
+            j = getJS(build_url, {"depth" : 0, "tree":"runs[url,number]"})
+            if j is None:
                 continue
 
-            j = res.json()
             try:
                 if not j:
                     # single run job
@@ -479,12 +474,10 @@ def pollTest(view):
 
     for url in view["urls"]:
 
-        res = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
-        if res is None:
+        j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
+        if j is None:
             continue
 
-
-        j = res.json()
         for job in j["jobs"]:
             doc = {}
             doc["name"] = job["name"]
