@@ -11,7 +11,7 @@ from constants import *
 
 JOBS = {}
 
-HOST = 'couchbase://127.0.0.1'
+HOST = '127.0.0.1'
 
 def getJS(url, params = None):
     print url
@@ -300,6 +300,32 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
         storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
 
 
+def getBuildInfo(url, causes):
+    if not causes:
+        return  # need to know why this build was triggered
+
+    upstreamId = getAction(causes, "upstreamBuild")
+    upstreamUrl = getAction(causes, "upstreamUrl")
+
+    if upstreamId and upstreamUrl:
+        parentUrl = url.split("job")[0]
+        parentUrl = "/".join([parentUrl, upstreamUrl, str(upstreamId)])
+        res = getJS(parentUrl)
+        if not res:
+            return
+        parentJob = res.json()
+        if parentJob:
+            actions = parentJob["actions"]
+            causes = getAction(actions, "causes")
+            return getBuildInfo(parentJob["url"], causes)
+    else:
+        # assuming root build with no cause
+        res = getJS(url)
+        if not res:
+            return
+        buildInfo = res.json()
+        return buildInfo
+
 def storeBuild(client, run, name, view):
     res = getJS(run["url"], {"depth" : 0})
     if not res:
@@ -326,6 +352,15 @@ def storeBuild(client, run, name, view):
     version = getAction(params, "name", "VERSION")
     build = getAction(params, "name", "CURRENT_BUILD_NUMBER") or getAction(params, "name", "BLD_NUM")
 
+    if not (version or build):
+        return
+
+    build = version+"-"+build.zfill(4)
+    buildInfo = None
+    if name == "build_sanity_matrix":
+        causes = getAction(actions, "causes")
+        buildInfo = getBuildInfo(job["url"], causes)
+
     name=os+"_"+name
     if getAction(params, "name", "UNIT_TEST"):
         name += "_unit"
@@ -334,11 +369,6 @@ def storeBuild(client, run, name, view):
     if not os or not comp:
         return
 
-
-    if not (version or build):
-        return
-
-    build = version+"-"+build.zfill(4)
 
     duration = int(job["duration"]) or 0
 
@@ -368,6 +398,8 @@ def storeBuild(client, run, name, view):
             client.remove(key)
         else:
             client.upsert(key, doc)
+            if buildInfo is not None:
+                client.upsert(build, buildInfo)
     except Exception as ex:
         print "set failed, couchbase down?: %s %s"  % (HOST, ex)
 
