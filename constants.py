@@ -91,7 +91,7 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "bucket": "build"}
 
 VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW, BUILD_VIEW]
-
+BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/watson-build/"]
 
 ## misc
 DEFAULT_BUILD = "0.0.0-xxxx"

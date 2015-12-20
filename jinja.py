@@ -10,20 +10,15 @@ from couchbase.bucket import Bucket
 from constants import *
 
 JOBS = {}
-CACHE = {}
 HOST = '127.0.0.1'
 
-def getJS(url, params = None, cache_ok = False):
+def getJS(url, params = None):
     print url
     res = None
 
-    if cache_ok and url in CACHE:
-        return CACHE[url]
     try:
         res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=3)
         data = res.json()
-        if cache_ok:
-            CACHE[url] = data
         return data
     except:
         print "[Error] url unreachable: %s" % url
@@ -307,26 +302,6 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
         storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
 
 
-def getBuildInfo(url, causes):
-    if not causes:
-        return  # need to know why this build was triggered
-
-    upstreamId = getAction(causes, "upstreamBuild")
-    upstreamUrl = getAction(causes, "upstreamUrl")
-
-    if upstreamId and upstreamUrl:
-        parentUrl = url.split("job")[0]
-        parentUrl = "/".join([parentUrl, upstreamUrl, str(upstreamId)])
-        parentJob = getJS(parentUrl, cache_ok=True)
-        if parentJob:
-            actions = parentJob["actions"]
-            causes = getAction(actions, "causes")
-            return getBuildInfo(parentJob["url"], causes)
-    else:
-        # assuming root build with no cause
-        buildInfo = getJS(url, cache_ok=True)
-        return buildInfo
-
 def storeBuild(client, run, name, view):
     job = getJS(run["url"], {"depth" : 0})
     if not job:
@@ -353,10 +328,6 @@ def storeBuild(client, run, name, view):
         return
 
     build = version+"-"+build.zfill(4)
-    buildInfo = None
-    if name == "build_sanity_matrix":
-        causes = getAction(actions, "causes")
-        buildInfo = getBuildInfo(job["url"], causes)
 
     name=os+"_"+name
     if getAction(params, "name", "UNIT_TEST"):
@@ -395,8 +366,6 @@ def storeBuild(client, run, name, view):
             client.remove(key)
         else:
             client.upsert(key, doc)
-            if buildInfo is not None:
-                client.upsert(build, buildInfo)
     except Exception as ex:
         print "set failed, couchbase down?: %s %s"  % (HOST, ex)
 
@@ -502,8 +471,35 @@ def pollTest(view):
             except:
                 pass
 
+def collectBuildInfo(url):
+
+        client = Bucket(HOST+'/server')
+        res = getJS(url, {"depth" : 1, "tree" :"builds[number,url]"})
+        if res is None:
+            return
+
+        builds = res['builds']
+        for b in builds:
+            url = b["url"]
+            job = getJS(url)
+            if job is not None:
+                actions = job["actions"]
+                params = getAction(actions, "parameters")
+                version = getAction(params, "name", "VERSION")
+                build_no = job["number"]
+                key = version+"-"+str(build_no).zfill(4)
+                try:
+                    print key
+                    client.upsert(key, job)
+                except:
+                    print "set failed, couchbase down?: %s"  % (HOST)
+
 
 if __name__ == "__main__":
+
+    for url in BUILDER_URLS:
+        collectBuildInfo(url)
+
     for view in VIEWS:
         JOBS = {}
         if view["bucket"] == "build":
