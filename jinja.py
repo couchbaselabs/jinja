@@ -486,8 +486,8 @@ def collectBuildInfo(url):
                 actions = job["actions"]
                 params = getAction(actions, "parameters")
                 version = getAction(params, "name", "VERSION")
-                build_no = job["number"]
-                key = version+"-"+str(build_no).zfill(4)
+                build_no = job["displayName"].replace(version+"-","").split("-")[0]
+                key = version+"-"+build_no.zfill(4)
                 try:
                     print key
                     client.upsert(key, job)
