@@ -12,7 +12,7 @@ from constants import *
 JOBS = {}
 HOST = '127.0.0.1'
 
-def getJS(url, params = None):
+def getJS(url, params = None, retry = 5):
     print url
     res = None
 
@@ -22,7 +22,12 @@ def getJS(url, params = None):
         return data
     except:
         print "[Error] url unreachable: %s" % url
-        pass
+        res = None
+        if retry:
+            retry = retry - 1
+            getJS(url, params, retry)
+        else:
+            pass
 
     return res
 
