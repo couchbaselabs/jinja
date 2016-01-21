@@ -17,7 +17,7 @@ def getJS(url, params = None, retry = 5):
     res = None
 
     try:
-        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=3)
+        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
         data = res.json()
         return data
     except:
