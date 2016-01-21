@@ -25,7 +25,7 @@ def getJS(url, params = None, retry = 5):
         res = None
         if retry:
             retry = retry - 1
-            getJS(url, params, retry)
+            return getJS(url, params, retry)
         else:
             pass
 
