@@ -174,10 +174,11 @@ def purgeDisabled(job, bucket):
             print "[WARN] did not find disabled job to delete: [%s-%s]" % (name,bid)
             pass # delete ok
 
-def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
+def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuilds = None):
 
     bucket = view["bucket"]
 
+    claimedBuilds = claimedBuilds or {}
     client = Bucket(HOST+'/'+bucket)
 
     doc = jobDoc
@@ -296,6 +297,17 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
             key = "%s-%s" % (doc["name"], doc["build_id"])
             key = hashlib.md5(key).hexdigest()
 
+            try: # get custom claim if exists
+                oldDoc = client.get(key)
+                customClaim =  oldDoc.value['customClaim']
+                if customClaim:
+                    claimedBuilds[doc["build"]] = customClaim
+            except:
+                pass #ok, this is new doc 
+
+            if doc["build"] in claimedBuilds: # apply custom claim
+                doc['customClaim'] = claimedBuilds[doc["build"]] 
+
             try:
                 client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
@@ -304,7 +316,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1):
 
 
     if first_pass:
-        storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount)
+        storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount, claimedBuilds = claimedBuilds)
 
 
 def storeBuild(client, run, name, view):
