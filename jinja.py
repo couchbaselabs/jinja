@@ -299,7 +299,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
             try: # get custom claim if exists
                 oldDoc = client.get(key)
-                customClaim =  oldDoc.value['customClaim']
+                customClaim =  oldDoc.value.get('customClaim')
                 if customClaim:
                     claimedBuilds[doc["build"]] = customClaim
             except:
