@@ -37,7 +37,12 @@ def getAction(actions, key, value = None):
     for a in actions:
         if a is None:
             continue
-        keys = a.keys()
+        if 'keys' in dir(a):
+            keys = a.keys()
+        else:
+            # check if new api
+            if 'keys' in dir(a[0]):
+                keys = a[0].keys() 
         if "urlName" in keys:
             if a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
                 continue
@@ -246,6 +251,12 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             doc["failCount"] = failCount
             doc["totalCount"] = totalCount - skipCount
             params = getAction(actions, "parameters")
+            if params is None:
+               # possibly new api
+               if not 'keys' in dir(actions) and len(actions) > 0:
+                   # actions is not a dict and has data 
+                   params = actions[0]
+
             componentParam = getAction(params, "name", "component")
             if componentParam:
                 componentParam = getAction(params, "name", "component")
