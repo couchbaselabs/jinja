@@ -472,7 +472,7 @@ def pollTest(view):
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
-        if j is None:
+        if j is None or j.get('jobs') is None:
             continue
 
         for job in j["jobs"]:
@@ -529,8 +529,8 @@ if __name__ == "__main__":
         collectBuildInfo(url)
 
     for view in VIEWS:
-        JOBS = {}
-        if view["bucket"] == "build":
-            pollBuild(view)
-        else:
-            pollTest(view)
+       JOBS = {}
+       if view["bucket"] == "build":
+           pollBuild(view)
+       else:
+           pollTest(view)
