@@ -1,4 +1,5 @@
 import re
+import sys
 import time
 import datetime
 import subprocess
@@ -11,6 +12,8 @@ from constants import *
 
 JOBS = {}
 HOST = '127.0.0.1'
+if len(sys.argv) == 2:
+    HOST = sys.argv[1]
 
 def getJS(url, params = None, retry = 5):
     print url
