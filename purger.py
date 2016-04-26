@@ -66,15 +66,15 @@ def purge(bucket, known_jobs):
             url = val[3]
             cnt = val[5]
             bid = val[6]
+            isExecutor = False
 
-            if url.find("test_suite_executor") > -1:
-                # no purging on executor
-                continue
+            if url.find("test_suite_executor") == -1:
+                isExecutor = True 
 
             print "Process: %s" % (name)
 
             # if job is unknown try to manually get url
-            if url not in known_jobs:
+            if url not in known_jobs and not isExecutor:
                 r = requests.get(url)
                 if r.status_code == 404:
                     print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
