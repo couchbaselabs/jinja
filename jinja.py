@@ -37,6 +37,7 @@ def getJS(url, params = None, retry = 5):
 def getAction(actions, key, value = None):
 
     obj = None
+    keys = []
     for a in actions:
         if a is None:
             continue
