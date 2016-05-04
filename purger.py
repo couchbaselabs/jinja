@@ -68,7 +68,7 @@ def purge(bucket, known_jobs):
             bid = val[6]
             isExecutor = False
 
-            if url.find("test_suite_executor") == -1:
+            if url.find("test_suite_executor") > -1:
                 isExecutor = True 
 
             print "Process: %s" % (name)
