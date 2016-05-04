@@ -14,7 +14,8 @@ JENKINS_URLS=["http://qa.sc.couchbase.com/",
              "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/",
              "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/",
              "http://sdkbuilds.couchbase.com/view/.NET/",
-             "http://qa.sc.couchbase.com/view/extended/"]
+             "http://qa.sc.couchbase.com/view/extended/",
+             "http://qa.sc.couchbase.com/view/OS%20Certification/"]
 def queryJenkinsJobs():
     _JOBS = []
 
@@ -70,6 +71,9 @@ def purge(bucket, known_jobs):
 
             if url.find("test_suite_executor") > -1:
                 isExecutor = True 
+
+            if comp in ["UNIT","BUILD_SANITY"]:
+                continue # don't purge build jobs
 
             print "Process: %s" % (name)
 
