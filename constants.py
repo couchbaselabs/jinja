@@ -14,11 +14,9 @@ SERVER_FEATURES = [
     "EEONLY-EEONLY",
     "SDK-SDK",
     "MOBILE-MOBILE",
-    "SANITY_EXT-SANITY_EXT",
-    "EXTENDED-SANITY_EXT",
+    "CERTIFY-OS_CERTIFY",
     "BREAKPAD-BREAKPAD",
     "CBSGW-SYNCGW",
-    "FOREST-FORESTDB",
     "RZA-RZA",
     "GEO-GEO",
     "EPENG-EP",
@@ -32,6 +30,7 @@ SERVER_FEATURES = [
     "VIEW-VIEW",
     "QUERY-QUERY",
     "GOXDCR-GOXDCR",
+    "FOREST-FORESTDB",
     "XDCR-XDCR",
     "REB-NSERV",
     "PAUSE-NSERV",
@@ -73,7 +72,7 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
