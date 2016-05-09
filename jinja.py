@@ -68,7 +68,7 @@ def getBuildAndPriority(params, isMobile = False):
 
     if params:
         if not isMobile:
-            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  getAction(params, "name", "build") or DEFAULT_BUILD
+            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  getAction(params, "name", "build") or  getAction(params, "name", "COUCHBASE_SERVER_VERSION") or DEFAULT_BUILD
         else:
             build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or getAction(params, "name", "COUCHBASE_MOBILE_VERSION") or getAction(params, "name", "CBL_iOS_Build")
 
