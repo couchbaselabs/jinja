@@ -9,6 +9,11 @@ import hashlib
 import json
 from couchbase.bucket import Bucket
 from constants import *
+from urlparse import urlparse
+
+UBER_USER = os.environ.get('UBER_USER') or ""
+UBER_PASS = os.environ.get('UBER_PASS') or ""
+
 
 JOBS = {}
 HOST = '127.0.0.1'
@@ -497,6 +502,11 @@ def pollTest(view):
             doc["component"] = comp
             doc["url"] = job["url"]
             doc["color"] = job.get("color")
+
+	    if doc["url"].find("uber") > -1:
+              # requires auth
+              doc_url =  urlparse(doc["url"])
+              doc["url"] = "http://%s:%s@%s%s" % (UBER_USER, UBER_PASS,  doc_url.netloc, doc_url.path)
 
             try:
                 storeTest(doc, view)
