@@ -1,3 +1,8 @@
+import os
+
+UBER_USER = os.environ.get('UBER_USER') or ""
+UBER_PASS = os.environ.get('UBER_PASS') or ""
+
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL"]
 MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET", "SYNCGATEWAY"]
@@ -72,7 +77,7 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://"+UBER_USER+":"+UBER_PASS+"@uberjenkins.sc.couchbase.com:8080/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
