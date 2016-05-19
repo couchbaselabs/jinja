@@ -75,8 +75,6 @@ def purge(bucket, known_jobs):
             if comp in ["UNIT","BUILD_SANITY"]:
                 continue # don't purge build jobs
 
-            print "Process: %s" % (name)
-
             # if job is unknown try to manually get url
             if url not in known_jobs and not isExecutor:
                 r = requests.get(url)
