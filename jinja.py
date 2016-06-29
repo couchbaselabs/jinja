@@ -53,7 +53,7 @@ def getAction(actions, key, value = None):
             if 'keys' in dir(a[0]):
                 keys = a[0].keys() 
         if "urlName" in keys:
-            if a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
+            if a["urlName"]!= "robot" and a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
                 continue
 
         if key in keys:
@@ -198,6 +198,9 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     doc = jobDoc
     url = doc["url"]
 
+    if url.find("sdkbuilds.couchbase") > -1:
+        url = url.replace("sdkbuilds.couchbase", "sdkbuilds.sc.couchbase")
+
     res = getJS(url, {"depth" : 0})
 
     if res is None:
@@ -267,20 +270,30 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                    params = actions[0]
 
             componentParam = getAction(params, "name", "component")
+           #if componentParam is None:
+           #    testYml = getAction(params, "name", "test")
+           #    if testYml and testYml.find(".yml"):
+           #        componentParam = str(os.path.split(testYml)[-1]).replace(".yml","")
+
             if componentParam:
-                componentParam = getAction(params, "name", "component")
                 subComponentParam = getAction(params, "name", "subcomponent")
+                if subComponentParam is None:
+                    subComponentParam = "server"
                 osParam = getAction(params, "name", "OS") or getAction(params, "name", "os")
+                if osParam is None:
+                    osParam = doc["os"]
                 if not componentParam or not subComponentParam or not osParam:
                     continue
 
                 pseudoName = str(osParam+"-"+componentParam+"_"+subComponentParam)
-                _os, _comp = getOsComponent(pseudoName, view)
-                if not _os or not _comp:
-                    continue # unkown os or comp
-                doc["os"] = _os
-                doc["component"] = _comp
                 doc["name"] = pseudoName
+                _os, _comp = getOsComponent(pseudoName, view)
+                if _os and  _comp:
+                   doc["os"] = _os
+                   doc["component"] = _comp
+                if not doc.get("os") or not doc.get("component"):
+                   continue
+
 
             if bucket == "server":
                 doc["build"], doc["priority"] = getBuildAndPriority(params)
