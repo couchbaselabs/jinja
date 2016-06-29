@@ -90,7 +90,7 @@ SDK_VIEW    = {"urls" : ["http://sdkbuilds.sc.couchbase.com", "http://sdkbuilds.
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}
-BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
+BUILD_VIEW = {"urls": ["http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
               "features": BUILD_FEATURES,
               "bucket": "build"}
