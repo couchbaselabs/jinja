@@ -1,27 +1,49 @@
+import os
 import time
 import requests
 from couchbase.bucket import Bucket
 
+UBER_USER = os.environ.get('UBER_USER') or ""
+UBER_PASS = os.environ.get('UBER_PASS') or ""
 BUCKETS=['server', 'mobile', 'sdk']
 HOST = 'couchbase://127.0.0.1'
 VIEW_API="http://127.0.0.1:8092/"
 JENKINS_URLS=["http://qa.sc.couchbase.com/",
-             "http://qa.hq.northscale.net/",
+#             "http://qa.hq.northscale.net/",
              "http://ci.sc.couchbase.com/",
-             "http://sdkbuilds.couchbase.com/",
              "http://mobile.jenkins.couchbase.com/",
-             "http://sdkbuilds.couchbase.com/view/LCB/job/feature/",
-             "http://sdkbuilds.couchbase.com/view/LCB/job/situational-lcb/",
-             "http://sdkbuilds.couchbase.com/view/JAVA/job/situational-java/",
-             "http://sdkbuilds.couchbase.com/view/.NET/",
+             "http://sdkbuilds.sc.couchbase.com/view/LCB/job/feature/",
+             "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/",
+             "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/",
+             "http://sdkbuilds.sc.couchbase.com/view/.NET/",
              "http://qa.sc.couchbase.com/view/extended/",
              "http://qa.sc.couchbase.com/view/OS%20Certification/"]
+#             "http://"+UBER_USER+":"+UBER_PASS+"@uberjenkins.sc.couchbase.com:8080/"]
+
+def getReq(url, timeout=10):
+
+    if url.find("qa.hq.northscale.net") > -1:
+       return None  # is down
+    if url.find("uberjenkins") > -1:
+       return None  # is down
+
+    rc = None
+    try:
+       rc = requests.get(url, timeout=timeout)
+    except Exception as ex:
+       print ex
+    return rc
+
 def queryJenkinsJobs():
     _JOBS = []
 
     for url in JENKINS_URLS:
         url=url+"api/json"
-        r = requests.get(url)
+        r = getReq(url) 
+     
+        if r is None:
+           continue 
+
         if r.status_code == 200:
             data = r.json()
             jobs = data.get("jobs")
@@ -43,7 +65,10 @@ def purge(bucket, known_jobs):
     ALL_COMPONENTS = []
 
     # purger for all platforms+comonent combo of each build
-    r = requests.get(BUILDS_Q)
+    r = getReq(BUILDS_Q)
+    if r is None:
+        return
+
     data = r.json()
     for row in data['rows']:
         build = row['key'][0]
@@ -51,7 +76,11 @@ def purge(bucket, known_jobs):
             continue
 
         url = DDOC+"/jobs_by_build?startkey=%22"+build+"%22&endkey=%22"+build+"_%22&inclusive_end=true&reduce=false&stale=false"
-        r = requests.get(url)
+
+	r = getReq(url)
+	if r is None:
+            continue
+
         data = r.json()
 
         # all jobs
@@ -68,6 +97,9 @@ def purge(bucket, known_jobs):
             cnt = val[5]
             bid = val[6]
             isExecutor = False
+            url_noauth = None
+            if url.find("@") > -1: # url has auth, clean
+                url_noauth = "http://"+url.split("@")[1]
 
             if url.find("test_suite_executor") > -1:
                 isExecutor = True 
@@ -76,11 +108,18 @@ def purge(bucket, known_jobs):
                 continue # don't purge build jobs
 
             # if job is unknown try to manually get url
-            if url not in known_jobs and not isExecutor:
-                r = requests.get(url)
+            url_find = url_noauth or url
+            if url_find not in known_jobs and not isExecutor:
+ 
+                r = getReq(url)
+                if r is None: 
+                    continue 
                 if r.status_code == 404:
-                    print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
-                    client.remove(_id)
+                    try:
+                        client.remove(_id)
+                        print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, val[5], bid)
+                    except:
+                        pass
                     continue
 
             if os in JOBS:
@@ -92,21 +131,32 @@ def purge(bucket, known_jobs):
                         oldDocId = match[0][1][2]
                         if oldBid > bid:
                            # purge this docId because it is less this saved bid
-                           client.remove(_id)
-                           print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
+                           try:
+                               client.remove(_id)
+                               print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
+                           except:
+                               pass
                         else:
                            # bid must exist in prior to purge replace
-                           if requests.get(url+"/"+str(bid)).status_code == 404:
+
+                           r = getReq(url+"/"+str(bid))
+                           if r is None: 
+                               continue 
+                           if r.status_code == 404:
                              # delete this newer bid as it no longer exists
-                             client.remove(_id)
+                             try:
+                                 client.remove(_id)
+                             except:
+                                 pass
                            else:
                              # purge old docId
-                             client.remove(oldDocId)
-
-                             # use this bid as new tracker
-                             JOBS[os][comp][idx] = (name, bid, _id)
-                             print "****PURGE-REPLACE*** %s_%s: %s:%s:%s (%s,%s > %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
-
+                             try:
+                                 client.remove(oldDocId)
+                                 # use this bid as new tracker
+                                 JOBS[os][comp][idx] = (name, bid, _id)
+                                 print "****PURGE-REPLACE*** %s_%s: %s:%s:%s (%s,%s > %s)" % (build, _id, os, comp, name, val[5], bid, oldBid)
+                             except:
+                                 pass
                         continue
                     else:
                         # append to current comp
@@ -129,4 +179,5 @@ if __name__ == "__main__":
             print ex
             pass
 
+        print "Last run " + time.strftime("%c")
         time.sleep(500)
