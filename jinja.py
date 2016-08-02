@@ -16,7 +16,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 
 JOBS = {}
-HOST = '127.0.0.1'
+HOST = '172.23.121.131'
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
@@ -508,6 +508,8 @@ def pollTest(view):
                 # already processed
                 continue
 
+            if job["name"].find("systest") == -1:
+                continue
             os, comp = getOsComponent(doc["name"], view)
             if not os or not comp:
                 if not isExecutor(job["name"]):
@@ -556,10 +558,10 @@ def collectBuildInfo(url):
 
 if __name__ == "__main__":
 
-    for url in BUILDER_URLS:
-        collectBuildInfo(url)
+#    for url in BUILDER_URLS:
+#        collectBuildInfo(url)
 
-    for view in VIEWS:
+    for view in [SERVER_VIEW]:
        JOBS = {}
        if view["bucket"] == "build":
            pollBuild(view)
