@@ -266,14 +266,18 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if params is None:
                # possibly new api
                if not 'keys' in dir(actions) and len(actions) > 0:
-                   # actions is not a dict and has data 
-                   params = actions[0]
+                   # actions is not a dict and has data
+                   # then use the first object that is a list
+                   for a in actions:
+                      if not 'keys' in dir(a):
+                          params = a
 
             componentParam = getAction(params, "name", "component")
-           #if componentParam is None:
-           #    testYml = getAction(params, "name", "test")
-           #    if testYml and testYml.find(".yml"):
-           #        componentParam = str(os.path.split(testYml)[-1]).replace(".yml","")
+            if componentParam is None:
+                testYml = getAction(params, "name", "test")
+                if testYml and testYml.find(".yml"):
+                    testFile = testYml.split(" ")[1]
+                    componentParam = "systest-"+str(os.path.split(testFile)[-1]).replace(".yml","")
 
             if componentParam:
                 subComponentParam = getAction(params, "name", "subcomponent")
