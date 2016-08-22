@@ -7,6 +7,7 @@ import os
 import requests
 import hashlib
 import json
+from threading import Thread
 from couchbase.bucket import Bucket
 from constants import *
 from urlparse import urlparse
@@ -427,6 +428,7 @@ def pollBuild(view):
 
     client = Bucket(HOST+'/server') # using server bucket (for now)
 
+    tJobs = [] 
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0})
@@ -442,17 +444,20 @@ def pollBuild(view):
                 continue
 
             try:
+                t = None
                 if not j:
                     # single run job
-                    storeBuild(client, job, name, view)
+                    t = Thread(target=storeBuild, args=(client, job, name, view))
                 else:
                     # each run is a result
                     for doc in j["runs"]:
-                        storeBuild(client, doc, name, view)
+                        t = Thread(target=storeBuild, args=(client, doc, name, view))
+                t.start()
+	        tJobs.append(t) 
             except Exception as ex:
                 print ex
                 pass
-
+    return tJobs
 
 def getOsComponent(name, view):
     _os = _comp = None
@@ -495,6 +500,7 @@ def getOsComponent(name, view):
 
 def pollTest(view):
 
+    tJobs = [] 
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
@@ -525,10 +531,12 @@ def pollTest(view):
               doc_url =  urlparse(doc["url"])
               doc["url"] = "http://%s:%s@%s%s" % (UBER_USER, UBER_PASS,  doc_url.netloc, doc_url.path)
 
-            try:
-                storeTest(doc, view)
-            except:
-                pass
+            name = doc["name"]
+            t = Thread(target=storeTest, args=(doc, view))
+            t.start()
+            tJobs.append(t) 
+
+    return tJobs
 
 def collectBuildInfo(url):
 
@@ -553,15 +561,34 @@ def collectBuildInfo(url):
                 except:
                     print "set failed, couchbase down?: %s"  % (HOST)
 
+def collectAllBuildInfo():
+    while True:
+       try:
+           for url in BUILDER_URLS:
+               collectBuildInfo(url)
+       except Exception as ex:
+           print "exception occurred during build collection: %s" % (ex)
+
 
 if __name__ == "__main__":
 
-    for url in BUILDER_URLS:
-        collectBuildInfo(url)
+   # run build collect info thread
+    tBuild = Thread(target=collectAllBuildInfo)
+    tBuild.start()
 
-    for view in VIEWS:
-       JOBS = {}
-       if view["bucket"] == "build":
-           pollBuild(view)
-       else:
-           pollTest(view)
+    while True:
+        # keep list of all threads
+        tAll = []
+        try:
+            for view in VIEWS:
+                JOBS = {}
+                if view["bucket"] == "build":
+                    tasks = pollBuild(view)
+                    tAll.extend(tasks) 
+                else:
+                    tasks = pollTest(view)
+                    tAll.extend(tasks) 
+            for t in tAll:
+                t.join()
+        except Exception as ex:
+            print "exception occurred during job collection: %s" % (ex)
