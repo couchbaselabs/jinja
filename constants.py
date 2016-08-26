@@ -9,10 +9,11 @@ MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET", "SYNCGATEWAY"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0"]
 
+#    "SYSTEST-SYSTEST",
+#    "SYSTEM-SYSTEST",
+
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
-    "SYSTEST-SYSTEST",
-    "SYSTEM-SYSTEST",
     "SUBDOC-SUBDOC",
     "FTS-FTS",
     "MOBILEUPGRADE-MOBILE_UPGRADE",
@@ -77,11 +78,11 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://"+UBER_USER+":"+UBER_PASS+"@uberjenkins.sc.couchbase.com/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/job/server-build-test-with-stable-sdk/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
-MOBILE_VIEW = {"urls" : ["http://qa.sc.couchbase.com/", "http://mobile.jenkins.couchbase.com/", "http://"+UBER_USER+":"+UBER_PASS+"@uberjenkins.sc.couchbase.com/"],
+MOBILE_VIEW = {"urls" : ["http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
@@ -94,7 +95,7 @@ BUILD_VIEW = {"urls": ["http://cv.jenkins.couchbase.com/view/scheduled-unit-test
               "features": BUILD_FEATURES,
               "bucket": "build"}
 
-VIEWS = [MOBILE_VIEW, SDK_VIEW, SERVER_VIEW, BUILD_VIEW]
+VIEWS = [SERVER_VIEW, BUILD_VIEW]
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/watson-build/"]
 
 ## misc
