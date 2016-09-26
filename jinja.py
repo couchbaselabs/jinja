@@ -217,7 +217,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
         first_pass = False
 
     buildHist = {}
-    if res["lastBuild"]:
+    if res.get("lastBuild") is not None:
 
         bids = [b["number"] for b in res["builds"]]
 

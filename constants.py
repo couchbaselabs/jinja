@@ -78,7 +78,7 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/job/server-build-test-with-stable-sdk/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/job/server-build-test-with-stable-sdk/job/lcb-sdk-centos-watson/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/situational-net/job/server-build-test-with-stable-sdk/job/net-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/job/situational-go/job/server-build-test-with-stable-sdk/job/go-sdk-centos-watson/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/", "http://qa.hq.northscale.net/", "http://ci.sc.couchbase.com", "http://qa.sc.couchbase.com/view/extended/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/sdk-lcb-situational/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/situational-net/job/sdk-test-with-stable-server/", "http://sdkbuilds.sc.couchbase.com/job/situational-go/job/server-build-test-with-stable-sdk/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
@@ -86,7 +86,7 @@ MOBILE_VIEW = {"urls" : ["http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
                "bucket": "mobile"}
-SDK_VIEW    = {"urls" : ["http://sdkbuilds.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/feature/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/situational-lcb/"],
+SDK_VIEW    = {"urls" : [],
                "platforms": SDK_PLATFORMS,
                "features": SDK_FEATURES,
                "bucket": "sdk"}
