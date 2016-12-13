@@ -70,7 +70,11 @@ def purge(bucket, known_jobs):
         return
 
     data = r.json()
-    for row in data['rows']:
+    rows = data.get('rows')
+    if rows is None:
+       print "No data for: "+bucket 
+       return 
+    for row in rows:
         build = row['key'][0]
         if not build:
             continue
