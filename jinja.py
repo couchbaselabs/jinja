@@ -42,6 +42,9 @@ def getJS(url, params = None, retry = 5):
 
 def getAction(actions, key, value = None):
 
+    if actions is None:
+        return None
+ 
     obj = None
     keys = []
     for a in actions:
@@ -534,9 +537,11 @@ def pollTest(view):
             name = doc["name"]
             t = Thread(target=storeTest, args=(doc, view))
             t.start()
-            tJobs.append(t) 
+            tJobs.append(t)
+        
+        for t in tJobs:
+            t.join()
 
-    return tJobs
 
 def collectBuildInfo(url):
 
@@ -563,6 +568,7 @@ def collectBuildInfo(url):
 
 def collectAllBuildInfo():
     while True:
+       time.sleep(120)
        try:
            for url in BUILDER_URLS:
                collectBuildInfo(url)
@@ -572,23 +578,19 @@ def collectAllBuildInfo():
 
 if __name__ == "__main__":
 
-   # run build collect info thread
+    # run build collect info thread
     tBuild = Thread(target=collectAllBuildInfo)
     tBuild.start()
 
     while True:
         # keep list of all threads
-        tAll = []
         try:
             for view in VIEWS:
                 JOBS = {}
                 if view["bucket"] == "build":
-                    tasks = pollBuild(view)
-                    tAll.extend(tasks) 
+                    pollBuild(view)
                 else:
-                    tasks = pollTest(view)
-                    tAll.extend(tasks) 
-            for t in tAll:
-                t.join()
+                    pollTest(view)
         except Exception as ex:
             print "exception occurred during job collection: %s" % (ex)
+        time.sleep(120)
