@@ -220,7 +220,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
         first_pass = False
 
     buildHist = {}
-    if res["lastBuild"]:
+    if res.get("lastBuild") is not None:
 
         bids = [b["number"] for b in res["builds"]]
 
@@ -528,11 +528,6 @@ def pollTest(view):
             doc["component"] = comp
             doc["url"] = job["url"]
             doc["color"] = job.get("color")
-
-	    if doc["url"].find("uber") > -1:
-              # requires auth
-              doc_url =  urlparse(doc["url"])
-              doc["url"] = "http://%s:%s@%s%s" % (UBER_USER, UBER_PASS,  doc_url.netloc, doc_url.path)
 
             name = doc["name"]
             t = Thread(target=storeTest, args=(doc, view))
