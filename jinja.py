@@ -432,6 +432,7 @@ def pollBuild(view):
     client = Bucket(HOST+'/server') # using server bucket (for now)
 
     tJobs = [] 
+
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0})
@@ -504,6 +505,7 @@ def getOsComponent(name, view):
 def pollTest(view):
 
     tJobs = [] 
+    
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
@@ -533,7 +535,13 @@ def pollTest(view):
             t = Thread(target=storeTest, args=(doc, view))
             t.start()
             tJobs.append(t)
-        
+
+            if len(tJobs) > 10:
+                # intermediate join
+                for t in tJobs:
+                    t.join()
+                tJobs = []
+
         for t in tJobs:
             t.join()
 
