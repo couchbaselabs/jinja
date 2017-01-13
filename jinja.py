@@ -171,6 +171,11 @@ def caveat_should_skip(doc):
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
+def skipCollect(params):
+    skip_collect_u = getAction(params, "name", "SKIP_GREENBOARD_COLLECT")
+    skip_collect_l = getAction(params, "name", "skip_greenboard_collect")
+    return skip_collect_u or skip_collect_l
+
 def isDisabled(job):
     status = job.get("color")
     return  status and (status == "disabled")
@@ -251,6 +256,12 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                 continue # unknown result state
 
             actions = res["actions"]
+            params = getAction(actions, "parameters")
+            if skipCollect(params):
+                job = getJS(url, {"depth" : 0})
+                purgeDisabled(job, bucket)
+                return
+
             totalCount = getAction(actions, "totalCount") or 0
             failCount  = getAction(actions, "failCount") or 0
             skipCount  = getAction(actions, "skipCount") or 0
@@ -266,7 +277,6 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
             doc["failCount"] = failCount
             doc["totalCount"] = totalCount - skipCount
-            params = getAction(actions, "parameters")
             if params is None:
                # possibly new api
                if not 'keys' in dir(actions) and len(actions) > 0:
