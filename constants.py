@@ -46,7 +46,7 @@ SERVER_FEATURES = [
     "UPGRADE-UPGRADE",
     "UPGRA-UPGRADE",
     "TRANSFER-TOOLS",
-    "CLI-TOOLS",
+    "CLI-CLI",
     "_UI-UI",
     "TOOLS-TOOLS",
     "IBR-TOOLS",
