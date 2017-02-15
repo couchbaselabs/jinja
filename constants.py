@@ -100,7 +100,10 @@ BUILD_VIEW = {"urls": ["http://cv.jenkins.couchbase.com/view/scheduled-unit-test
               "bucket": "build"}
 
 VIEWS = [SERVER_VIEW, BUILD_VIEW]
-BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/watson-build/"]
+BUILDER_URLS = [#"http://server.jenkins.couchbase.com/job/couchbase-server-build/",
+                "http://server.jenkins.couchbase.com/job/watson-build/"]
+
+CHANGE_LOG_URL = "http://172.23.123.43:8282/changelog"
 
 ## misc
 DEFAULT_BUILD = "0.0.0-xxxx"

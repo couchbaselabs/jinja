@@ -21,12 +21,14 @@ HOST = '127.0.0.1'
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
-def getJS(url, params = None, retry = 5):
+def getJS(url, params = None, retry = 5, append_api_json=True):
     print url
     res = None
-
     try:
-        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+        if append_api_json:
+            res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+        else:
+            res = requests.get("%s" % url, params=params, timeout=15)
         data = res.json()
         return data
     except:
@@ -574,6 +576,10 @@ def collectBuildInfo(url):
                 build_no = job["displayName"].replace(version+"-","").split("-")[0]
                 key = version+"-"+build_no.zfill(4)
                 try:
+                    if float(version[:2]) > 4.6:
+                        changeset_url = CHANGE_LOG_URL+"?ver={0}&from={1}&to={2}".\
+                            format(version, str(int(build_no[1:])-1), build_no[1:])
+                        job = getJS(changeset_url, append_api_json=False)
                     print key
                     client.upsert(key, job)
                 except:
