@@ -65,7 +65,10 @@ MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
                    "UPGR-UPGRADE",
                    "SANITY-SANITY",
                    "BUILD-BUILD",
-                   "UNIT-UNIT"]
+                   "UNIT-UNIT",
+                   "CLIENT-CLIENT",
+                   "LITECORE-LITECORE",
+                   "LISTENER-LISTENER"]
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
     "SITUATIONAL-SITUATIONAL",
