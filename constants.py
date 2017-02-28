@@ -7,7 +7,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL"]
 MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET", "SYNCGATEWAY"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
-MOBILE_VERSION = ["1.1.0", "1.2.0", "1.4"]
+MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 
 ## --- FEATURES --- ##
@@ -99,7 +99,7 @@ BUILD_VIEW = {"urls": ["http://cv.jenkins.couchbase.com/view/scheduled-unit-test
               "features": BUILD_FEATURES,
               "bucket": "build"}
 
-VIEWS = [SERVER_VIEW, BUILD_VIEW]
+VIEWS = [MOBILE_VIEW, SERVER_VIEW, BUILD_VIEW]
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/watson-build/"]
 
 ## misc
