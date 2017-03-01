@@ -5,7 +5,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL"]
-MOBILE_PLATFORMS = ["CBLITE", "ANDROID","IOS", "JAVA", "NET", "SYNCGATEWAY", "SYNC-GATEWAY", "LISTENER", "LITESERV"]
+MOBILE_PLATFORMS = ["CBLITE", "CBLITEIOS", "CEN7", "CEN006", "ANDROID","IOS", "JAVA", "WINDOWS", "MONO", "MACOSX"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
@@ -67,8 +67,8 @@ MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
                    "BUILD-BUILD",
                    "UNIT-UNIT",
                    "CLIENT-CLIENT",
-                   "LITECORE-LITECORE",
-                   "LISTENER-LISTENER"]
+                   "LISTENER-LISTENER",
+                   "NODE-NODE"]
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
     "SITUATIONAL-SITUATIONAL",
