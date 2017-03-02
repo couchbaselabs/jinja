@@ -21,12 +21,13 @@ HOST = '127.0.0.1'
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
-def getJS(url, params = None, retry = 5):
-    print url
+def getJS(url, params = None, retry = 5, append_api_json=True):
     res = None
-
     try:
-        res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+        if append_api_json:
+            res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+        else:
+            res = requests.get("%s" % url, params=params, timeout=15)
         data = res.json()
         return data
     except:
@@ -556,28 +557,54 @@ def pollTest(view):
             t.join()
 
 
+def convert_changeset_to_old_format(new_doc, timestamp):
+    old_format = {}
+    old_format['timestamp'] = timestamp
+    old_format['changeSet'] = {}
+    old_format_items = []
+    for change in new_doc['log']:
+        item = {}
+        msg = change['message']
+        # to remove the multiple '\n's, now appearing in the comment
+        # that mess with greenboard's display of reviewUrl
+        item['msg'] = msg[:msg.index('Change-Id')].replace("\n", " ") +\
+                      msg[msg.index('Change-Id') - 1:]
+        old_format_items.append(item)
+    old_format['changeSet']['items'] = old_format_items
+    return old_format
+
+
 def collectBuildInfo(url):
 
-        client = Bucket(HOST+'/server')
-        res = getJS(url, {"depth" : 1, "tree" :"builds[number,url]"})
-        if res is None:
-            return
+    client = Bucket(HOST+'/server')
+    res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
+    if res is None:
+        return
 
-        builds = res['builds']
-        for b in builds:
-            url = b["url"]
-            job = getJS(url)
-            if job is not None:
-                actions = job["actions"]
-                params = getAction(actions, "parameters")
-                version = getAction(params, "name", "VERSION")
-                build_no = job["displayName"].replace(version+"-","").split("-")[0]
-                key = version+"-"+build_no.zfill(4)
-                try:
-                    print key
-                    client.upsert(key, job)
-                except:
-                    print "set failed, couchbase down?: %s"  % (HOST)
+    builds = res['builds']
+    for b in builds:
+        url = b["url"]
+        job = getJS(url)
+        if job is not None:
+            actions = job["actions"]
+            params = getAction(actions, "parameters")
+            version = getAction(params, "name", "VERSION")
+            timestamp = job['timestamp']
+            build_no = job["displayName"].replace(version+"-","").split("-")[0]
+            key = version+"-"+build_no.zfill(4)
+            try:
+                if version[:3] == "0.0":
+                    continue
+                if float(version[:3]) > 4.6:
+                    changeset_url = CHANGE_LOG_URL+"?ver={0}&from={1}&to={2}".\
+                        format(version, str(int(build_no[1:])-1), build_no[1:])
+                    job = getJS(changeset_url, append_api_json=False)
+                    key = version+"-"+build_no[1:].zfill(4)
+                    job = convert_changeset_to_old_format(job, timestamp)
+                print key
+                client.upsert(key, job)
+            except:
+                print "set failed, couchbase down?: %s"  % (HOST)
 
 def collectAllBuildInfo():
     while True:
