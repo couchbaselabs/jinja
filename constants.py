@@ -93,7 +93,7 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/job/centos-java-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/job/centos-net-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/job/centos-go-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/job/centos-lcb-sdk-watson/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/job/centos-java-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/job/centos-net-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/job/centos-go-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/job/centos-lcb-sdk-watson/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/job/centos-java-sdk-spock/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/job/centos-net-sdk-spock/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/job/centos-go-sdk-spock/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/job/centos-lcb-sdk-spock/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
