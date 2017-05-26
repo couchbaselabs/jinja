@@ -137,6 +137,15 @@ def getClaimReason(actions):
 
     return reason
 
+# append xattrs to mobile convergence jobs 
+def caveat_xattrs(params, doc, nameOrig):
+   if getAction(params, "name", "ENABLE_XATTRS") == True:
+       doc["component"] = "MOBILE_CONVERGENCE"
+       doc["name"] = nameOrig+"_xattrs-convergence" 
+   else:
+       doc["name"] = nameOrig
+   return doc
+
 # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
 def caveat_swap_xdcr(doc):
     comp = doc["component"]
@@ -209,6 +218,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     client = Bucket(HOST+'/'+bucket)
 
     doc = jobDoc
+    nameOrig = doc["name"]
     url = doc["url"]
 
     if url.find("sdkbuilds.couchbase") > -1:
@@ -324,6 +334,9 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
             if not doc.get("build"):
                 continue
+
+            # xattrs caveat
+            doc = caveat_xattrs(params, doc, nameOrig)
 
             # run special caveats on collector
             doc["component"] = caveat_swap_xdcr(doc)
