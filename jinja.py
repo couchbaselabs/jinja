@@ -621,7 +621,7 @@ def collectBuildInfo(url):
 
 def collectAllBuildInfo():
     while True:
-       time.sleep(120)
+       time.sleep(600)
        try:
            for url in BUILDER_URLS:
                collectBuildInfo(url)
