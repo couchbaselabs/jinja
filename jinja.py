@@ -185,6 +185,9 @@ def purgeDisabled(job, bucket):
     client = Bucket(HOST+'/'+bucket)
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
+    if len(bids) == 0:
+        return
+
     high_bid = bids[0]
     for bid in xrange(high_bid):
         # reconstruct doc id
@@ -322,6 +325,10 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if not doc.get("build"):
                 continue
 
+            # xattrs caveat
+            if getAction(params, "name", "ENABLE_XATTRS") == True:
+                doc["component"] = "MOBILE_CONVERGENCE"
+ 
             # run special caveats on collector
             doc["component"] = caveat_swap_xdcr(doc)
             if caveat_should_skip(doc):
