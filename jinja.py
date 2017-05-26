@@ -598,7 +598,13 @@ def collectBuildInfo(url):
             version = getAction(params, "name", "VERSION")
             timestamp = job['timestamp']
             build_no = job["displayName"].replace(version+"-","").split("-")[0]
-            key = version+"-"+build_no.zfill(4)
+            key = version+"-"+build_no[1:].zfill(4)
+            try:
+               # check if we have key
+               client.get(key)
+               continue # already collected changeset
+            except:
+               pass
             try:
                 if version[:3] == "0.0":
                     continue
