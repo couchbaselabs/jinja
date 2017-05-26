@@ -325,10 +325,6 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if not doc.get("build"):
                 continue
 
-            # xattrs caveat
-            if getAction(params, "name", "ENABLE_XATTRS") == True:
-                doc["component"] = "MOBILE_CONVERGENCE"
- 
             # run special caveats on collector
             doc["component"] = caveat_swap_xdcr(doc)
             if caveat_should_skip(doc):
