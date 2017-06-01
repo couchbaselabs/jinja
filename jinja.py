@@ -319,6 +319,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
                 pseudoName = str(osParam+"-"+componentParam+"_"+subComponentParam)
                 doc["name"] = pseudoName
+                nameOrig = pseudoName
                 _os, _comp = getOsComponent(pseudoName, view)
                 if _os and  _comp:
                    doc["os"] = _os
