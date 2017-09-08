@@ -137,15 +137,6 @@ def getClaimReason(actions):
 
     return reason
 
-# append xattrs to mobile convergence jobs 
-def caveat_xattrs(params, doc, nameOrig):
-   if getAction(params, "name", "ENABLE_XATTRS") == True:
-       doc["component"] = "MOBILE_CONVERGENCE"
-       doc["name"] = nameOrig+"_xattrs-convergence" 
-   else:
-       doc["name"] = nameOrig
-   return doc
-
 # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
 def caveat_swap_xdcr(doc):
     comp = doc["component"]
@@ -178,6 +169,11 @@ def caveat_should_skip(doc):
    return caveat_should_skip_win(doc) or\
           caveat_should_skip_backup_recovery(doc)
 
+def caveat_should_skip_mobile(doc):
+   # skip mobile component loading for non cen os
+   return (doc["component"].find("MOBILE") > -1) and\
+             (doc["os"].find("CEN") == -1)
+
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
 
@@ -207,7 +203,6 @@ def purgeDisabled(job, bucket):
         try:
             client.remove(oldKey)
         except Exception as ex:
-            print "[WARN] did not find disabled job to delete: [%s-%s]" % (name,bid)
             pass # delete ok
 
 def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuilds = None):
@@ -243,7 +238,13 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
         bids = [b["number"] for b in res["builds"]]
 
-        if first_pass:
+        if isExecutor(doc["name"]):
+            # include more history
+            start = bids[0]-300
+            if start > 0:
+                bids = range(start, bids[0]+1)
+            bids.reverse()
+        elif first_pass:
             bids.reverse()  # bottom to top 1st pass
 
         for bid in bids:
@@ -258,7 +259,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             doc["build_id"] = bid
             res = getJS(url+str(bid), {"depth" : 0})
             if res is None:
-                return
+                continue 
 
             if "result" not in res:
                 continue
@@ -336,12 +337,12 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if not doc.get("build"):
                 continue
 
-            # xattrs caveat
-            doc = caveat_xattrs(params, doc, nameOrig)
-
             # run special caveats on collector
             doc["component"] = caveat_swap_xdcr(doc)
             if caveat_should_skip(doc):
+                continue
+
+            if caveat_should_skip_mobile(doc):
                 continue
 
             histKey = doc["name"]+"-"+doc["build"]
@@ -369,13 +370,10 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             try: # get custom claim if exists
                 oldDoc = client.get(key)
                 customClaim =  oldDoc.value.get('customClaim')
-                if customClaim:
-                    claimedBuilds[doc["build"]] = customClaim
+             #  if customClaim is not None:
+             #      doc["customClaim"] = customClaim
             except:
                 pass #ok, this is new doc 
-
-            if doc["build"] in claimedBuilds: # apply custom claim
-                doc['customClaim'] = claimedBuilds[doc["build"]] 
 
             try:
                 client.upsert(key, doc)
@@ -383,6 +381,8 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             except:
                 print "set failed, couchbase down?: %s"  % (HOST)
 
+            if doc.get("claimedBuilds"): # rm custom claim
+                  del doc["claimedBuilds"]
 
     if first_pass:
         storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount, claimedBuilds = claimedBuilds)
@@ -410,7 +410,7 @@ def storeBuild(client, run, name, view):
     version = getAction(params, "name", "VERSION")
     build = getAction(params, "name", "CURRENT_BUILD_NUMBER") or getAction(params, "name", "BLD_NUM")
 
-    if not (version or build):
+    if not version or not build:
         return
 
     build = version+"-"+build.zfill(4)
@@ -607,8 +607,10 @@ def collectBuildInfo(url):
             params = getAction(actions, "parameters")
             version = getAction(params, "name", "VERSION")
             timestamp = job['timestamp']
-            build_no = job["displayName"].replace(version+"-","").split("-")[0]
-            key = version+"-"+build_no[1:].zfill(4)
+            build_no = getAction(params, "name", "BLD_NUM")
+            if build_no is None:
+                continue
+            key = version+"-"+build_no.zfill(4)
             try:
                # check if we have key
                client.get(key)
@@ -620,11 +622,10 @@ def collectBuildInfo(url):
                     continue
                 if float(version[:3]) > 4.6:
                     changeset_url = CHANGE_LOG_URL+"?ver={0}&from={1}&to={2}".\
-                        format(version, str(int(build_no[1:])-1), build_no[1:])
+                        format(version, str(int(build_no)-1), build_no)
                     job = getJS(changeset_url, append_api_json=False)
                     key = version+"-"+build_no[1:].zfill(4)
                     job = convert_changeset_to_old_format(job, timestamp)
-                print key
                 client.upsert(key, job)
             except:
                 print "set failed, couchbase down?: %s"  % (HOST)
