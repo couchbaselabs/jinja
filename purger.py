@@ -6,8 +6,8 @@ from couchbase.bucket import Bucket
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 BUCKETS=['server', 'mobile', 'sdk']
-HOST = 'couchbase://127.0.0.1'
-VIEW_API="http://127.0.0.1:8092/"
+HOST = 'couchbase://172.23.99.54'
+VIEW_API="http://172.23.99.54:8092/"
 JENKINS_URLS=["http://qa.sc.couchbase.com/",
 #             "http://qa.hq.northscale.net/",
              "http://ci.sc.couchbase.com/",
@@ -17,14 +17,12 @@ JENKINS_URLS=["http://qa.sc.couchbase.com/",
              "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/situational-java/",
              "http://sdkbuilds.sc.couchbase.com/view/.NET/",
              "http://qa.sc.couchbase.com/view/extended/",
-             "http://qa.sc.couchbase.com/view/OS%20Certification/"]
-#             "http://"+UBER_USER+":"+UBER_PASS+"@uberjenkins.sc.couchbase.com:8080/"]
+             "http://qa.sc.couchbase.com/view/OS%20Certification/",
+             "http://uberjenkins.sc.couchbase.com:8080/"]
 
 def getReq(url, timeout=10):
 
     if url.find("qa.hq.northscale.net") > -1:
-       return None  # is down
-    if url.find("uberjenkins") > -1:
        return None  # is down
 
     rc = None
@@ -40,7 +38,7 @@ def queryJenkinsJobs():
     for url in JENKINS_URLS:
         url=url+"api/json"
         r = getReq(url) 
-     
+    
         if r is None:
            continue 
 
