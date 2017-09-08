@@ -9,6 +9,7 @@ import hashlib
 import json
 from threading import Thread
 from couchbase.bucket import Bucket
+from couchbase.cluster import Cluster, ClassicAuthenticator, PasswordAuthenticator
 from constants import *
 from urlparse import urlparse
 
@@ -18,6 +19,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
 HOST = '127.0.0.1'
+
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
@@ -187,7 +189,7 @@ def isDisabled(job):
     return  status and (status == "disabled")
 
 def purgeDisabled(job, bucket):
-    client = Bucket(HOST+'/'+bucket)
+    client = newClient(bucket, "password")
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
     if len(bids) == 0:
@@ -210,7 +212,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     bucket = view["bucket"]
 
     claimedBuilds = claimedBuilds or {}
-    client = Bucket(HOST+'/'+bucket)
+    client = newClient(bucket, "password")
 
     doc = jobDoc
     nameOrig = doc["name"]
@@ -457,7 +459,7 @@ def storeBuild(client, run, name, view):
 
 def pollBuild(view):
 
-    client = Bucket(HOST+'/server') # using server bucket (for now)
+    client = newClient('server', "password")
 
     tJobs = [] 
 
@@ -593,7 +595,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 def collectBuildInfo(url):
 
-    client = Bucket(HOST+'/server')
+    client = newClient('server', "password")
     res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -639,6 +641,21 @@ def collectAllBuildInfo():
        except Exception as ex:
            print "exception occurred during build collection: %s" % (ex)
 
+def newClient(bucket, password=""):
+    client = None
+    try:
+        client = Bucket(HOST+'/'+bucket, password=password)
+
+    except AuthError:
+
+        # try rbac style auth
+        endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
+        cluster = Cluster(endpoint)
+        auther = PasswordAuthenticator(bucket, password)
+        cluster.authenticate(auther)
+        client = cluster.open_bucket(self.bucket)
+
+    return client
 
 if __name__ == "__main__":
 
