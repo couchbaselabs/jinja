@@ -21,7 +21,7 @@ JOBS = {}
 HOST = '127.0.0.1'
 SASL_PASS = None 
 
-if len(sys.argv) == 2:
+if len(sys.argv) >= 2:
     HOST = sys.argv[1]
 
 if len(sys.argv) == 3:
