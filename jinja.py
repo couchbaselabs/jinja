@@ -19,9 +19,13 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
 HOST = '127.0.0.1'
+SASL_PASS = None 
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
+
+if len(sys.argv) == 3:
+    SASL_PASS = sys.argv[2]
 
 def getJS(url, params = None, retry = 5, append_api_json=True):
     res = None
@@ -189,7 +193,7 @@ def isDisabled(job):
     return  status and (status == "disabled")
 
 def purgeDisabled(job, bucket):
-    client = newClient(bucket, "password")
+    client = newClient(bucket, SASL_PASS)
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
     if len(bids) == 0:
@@ -212,7 +216,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     bucket = view["bucket"]
 
     claimedBuilds = claimedBuilds or {}
-    client = newClient(bucket, "password")
+    client = newClient(bucket, SASL_PASS)
 
     doc = jobDoc
     nameOrig = doc["name"]
@@ -459,7 +463,7 @@ def storeBuild(client, run, name, view):
 
 def pollBuild(view):
 
-    client = newClient('server', "password")
+    client = newClient('server', SASL_PASS)
 
     tJobs = [] 
 
@@ -595,7 +599,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 def collectBuildInfo(url):
 
-    client = newClient('server', "password")
+    client = newClient('server', SASL_PASS)
     res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -641,19 +645,24 @@ def collectAllBuildInfo():
        except Exception as ex:
            print "exception occurred during build collection: %s" % (ex)
 
-def newClient(bucket, password=""):
+def newClient(bucket, password=None):
     client = None
-    try:
-        client = Bucket(HOST+'/'+bucket, password=password)
 
-    except AuthError:
+    try:
+        if password is not None:
+            # attempt sasl auth
+            client = Bucket(HOST+'/'+bucket, password=password)
+        else:
+            # plain auth
+            client = Bucket(HOST+'/'+bucket)
+    except Exception as ex:
 
         # try rbac style auth
         endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
         cluster = Cluster(endpoint)
         auther = PasswordAuthenticator(bucket, password)
         cluster.authenticate(auther)
-        client = cluster.open_bucket(self.bucket)
+        client = cluster.open_bucket(bucket)
 
     return client
 
