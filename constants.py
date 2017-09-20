@@ -12,7 +12,6 @@ MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
-    "LWW-LWW",
     "RBAC-RBAC",
     "PLASMA-PLASMA",
     "IMPORT-IMPORT_EXPORT",
