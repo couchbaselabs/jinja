@@ -8,24 +8,166 @@ import requests
 import hashlib
 import json
 from threading import Thread
-from couchbase.bucket import Bucket
-from couchbase.cluster import Cluster, ClassicAuthenticator, PasswordAuthenticator
+from couchbase.bucket import Bucket, LOCKMODE_WAIT
+from couchbase.n1ql import N1QLQuery
 from constants import *
 from urlparse import urlparse
+
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 
 JOBS = {}
-HOST = '127.0.0.1'
-SASL_PASS = None 
-
-if len(sys.argv) >= 2:
+ALLJOBS = {}
+CLIENTS = {}
+HOST = '172.23.109.74'
+if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
-if len(sys.argv) == 3:
-    SASL_PASS = sys.argv[2]
+def createClients():
+    for view in VIEWS:
+        bucket = view['bucket']
+        if bucket == "build":
+            continue
+        try:
+            client = Bucket("couchbase://{0}/{1}".format(HOST, bucket), lockmode=LOCKMODE_WAIT)
+            CLIENTS[bucket] = client
+        except Exception:
+            print "Error while connecting to {0}/{1}".format(HOST, bucket)
+    try:
+        client = Bucket("couchbase://{0}/{1}".format(HOST, "builds"), lockmode=LOCKMODE_WAIT)
+        CLIENTS['builds'] = client
+    except Exception:
+        print "Error while connecting to {0}/{1}".format(HOST, "builds")
+
+def get_build_document(build, type):
+    client = CLIENTS['builds']
+    try:
+        doc = client.get(build)
+        return doc.value
+    except Exception:
+        doc = {
+            "build": build,
+            "totalCount": 0,
+            "failCount": 0,
+            "type": type,
+            "os": {}
+        }
+        if type=='server':
+            platform = SERVER_PLATFORMS
+            features = SERVER_FEATURES
+        elif type == 'mobile':
+            platform = MOBILE_PLATFORMS
+            features = MOBILE_FEATURES
+        elif type == 'sdk':
+            platform = SDK_PLATFORMS
+            features = SDK_FEATURES
+        elif type == 'build':
+            platform =  SERVER_PLATFORMS
+            features = BUILD_FEATURES
+        for _platform in platform:
+            _features = {}
+            for _feature in features:
+                _features[_feature.split('-')[1]] = {}
+            doc['os'][_platform] = _features
+        return doc
+
+def store_build_details(build_document, type):
+    build = build_document['build']
+    doc = get_build_document(build, type)
+    os = build_document['os']
+    component = build_document['component']
+    name = build_document['name']
+
+    if (type not in ALLJOBS):
+        ALLJOBS[type] = {}
+    if os not in ALLJOBS[type]:
+        ALLJOBS[type][os] = {}
+    if component not in ALLJOBS[type][os]:
+        ALLJOBS[type][os][component] = {}
+    ALLJOBS[type][os][component][name] = {
+        "totalCount": build_document['totalCount'],
+        "url": build_document['url'],
+        "priority": build_document['priority']
+    }
+
+    existing_builds = doc['os'][os][component]
+    if name in existing_builds:
+        build_exist = [t for t in existing_builds[name] if t['build_id'] == build_document['build_id']]
+        if build_exist.__len__() != 0:
+            return
+    else:
+        existing_builds[name] = []
+    build_to_store = {
+        "build_id": build_document['build_id'],
+        "claim": "",
+        "totalCount": build_document['totalCount'],
+        "result": build_document['result'],
+        "duration": build_document['duration'],
+        "url": build_document['url'],
+        "priority": build_document['priority'],
+        "failCount": build_document['failCount'],
+        "color": build_document['color'] if 'color' in build_document else '',
+        "deleted": False,
+        "olderBuild": False
+    }
+    doc['os'][os][component][name].append(build_to_store)
+    doc['totalCount'] += build_document['totalCount']
+    doc['failCount'] += build_document['failCount']
+    client = CLIENTS['builds']
+    client.upsert(build, doc)
+
+def purge_job_details(doc_id, type):
+    client = CLIENTS[type]
+    build_client = CLIENTS['builds']
+    try:
+        job = client.get(doc_id).value
+        if 'build' not in job:
+            return
+        build = job['build']
+        build_document = build_client.get(build)
+        os = job['os']
+        name = job['name']
+        build_id = job['build_id']
+        component = job['component']
+        if(build_document['os'][os][component].__len__() == 0 or name not in build_document['os'][os][component]):
+            return
+        to_del_job = [t for t in build_document['os'][os][component][name] if t['build_id'] == build_id]
+        if to_del_job.__len__() == 0:
+            return
+        to_del_job = to_del_job[0]
+        to_del_job['deleted'] = True
+        build_document['totalCount'] -= to_del_job['totalCount']
+        build_document['failCount'] -= to_del_job['failCount']
+        build_client.upsert(build, build_document)
+    except Exception:
+        pass
+
+def store_existing_jobs():
+    client = CLIENTS['builds']
+    try:
+        stored_builds = client.get("existing_builds")
+        if stored_builds != ALLJOBS:
+            client.upsert("existing_builds", ALLJOBS)
+    except Exception:
+        client.upsert("existing_builds", ALLJOBS)
+
+def get_from_bucket_and_store_build(bucket):
+    client = CLIENTS[bucket]
+    builds_query = "select distinct `build` from {0} where `build` is not null order by `build`".format(bucket)
+    for row in client.n1ql_query(N1QLQuery(builds_query)):
+        build = row['build']
+        if not build:
+            continue
+        jobsQuery = "select * from {0} where `build` = '{1}'".format(bucket, build)
+        for job in client.n1ql_query(N1QLQuery(jobsQuery)):
+            doc = job[bucket]
+            store_build_details(doc, bucket)
+
 
 def getJS(url, params = None, retry = 5, append_api_json=True):
     res = None
@@ -51,7 +193,7 @@ def getAction(actions, key, value = None):
 
     if actions is None:
         return None
- 
+
     obj = None
     keys = []
     for a in actions:
@@ -62,7 +204,7 @@ def getAction(actions, key, value = None):
         else:
             # check if new api
             if 'keys' in dir(a[0]):
-                keys = a[0].keys() 
+                keys = a[0].keys()
         if "urlName" in keys:
             if a["urlName"]!= "robot" and a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
                 continue
@@ -193,7 +335,7 @@ def isDisabled(job):
     return  status and (status == "disabled")
 
 def purgeDisabled(job, bucket):
-    client = newClient(bucket, SASL_PASS)
+    client = CLIENTS[bucket]
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
     if len(bids) == 0:
@@ -207,6 +349,7 @@ def purgeDisabled(job, bucket):
         oldKey = hashlib.md5(oldKey).hexdigest()
         # purge
         try:
+            purge_job_details(oldKey, bucket)
             client.remove(oldKey)
         except Exception as ex:
             pass # delete ok
@@ -216,7 +359,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     bucket = view["bucket"]
 
     claimedBuilds = claimedBuilds or {}
-    client = newClient(bucket, SASL_PASS)
+    client = CLIENTS[bucket]
 
     doc = jobDoc
     nameOrig = doc["name"]
@@ -265,7 +408,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             doc["build_id"] = bid
             res = getJS(url+str(bid), {"depth" : 0})
             if res is None:
-                continue 
+                continue
 
             if "result" not in res:
                 continue
@@ -351,6 +494,8 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if caveat_should_skip_mobile(doc):
                 continue
 
+            store_build_details(doc, bucket)
+
             histKey = doc["name"]+"-"+doc["build"]
             if not first_pass and histKey in buildHist:
 
@@ -362,6 +507,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                 try:
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
+                    purge_job_details(oldKey, bucket)
                     client.remove(oldKey)
                     #print "DELETED- %d:%s" % (bid, histKey)
                 except:
@@ -379,7 +525,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
              #  if customClaim is not None:
              #      doc["customClaim"] = customClaim
             except:
-                pass #ok, this is new doc 
+                pass #ok, this is new doc
 
             try:
                 client.upsert(key, doc)
@@ -452,6 +598,7 @@ def storeBuild(client, run, name, view):
     print key+","+build
     key = hashlib.md5(key).hexdigest()
 
+    store_build_details(doc, "build")
     try:
         if version == "4.1.0":
             # not tracking, remove and ignore
@@ -463,9 +610,9 @@ def storeBuild(client, run, name, view):
 
 def pollBuild(view):
 
-    client = newClient('server', SASL_PASS)
+    client = CLIENTS['server'] # using server bucket (for now)
 
-    tJobs = [] 
+    tJobs = []
 
     for url in view["urls"]:
 
@@ -474,6 +621,7 @@ def pollBuild(view):
             continue
 
         name = j["name"]
+        JOBS[name] = {}
         for job in j["builds"]:
             build_url = job["url"]
 
@@ -482,20 +630,16 @@ def pollBuild(view):
                 continue
 
             try:
-                t = None
                 if not j:
                     # single run job
-                    t = Thread(target=storeBuild, args=(client, job, name, view))
+                    storeBuild(client, job, name, view)
                 else:
                     # each run is a result
                     for doc in j["runs"]:
-                        t = Thread(target=storeBuild, args=(client, doc, name, view))
-                t.start()
-	        tJobs.append(t) 
+                        storeBuild(client, doc, name, view)
             except Exception as ex:
                 print ex
                 pass
-    return tJobs
 
 def getOsComponent(name, view):
     _os = _comp = None
@@ -520,8 +664,8 @@ def getOsComponent(name, view):
             if os[:1] == name.upper()[:1]:
                 _os = os
 
-    if _os is None:
-        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
+#    if _os is None:
+#        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
 
     for comp in FEATURES:
         tag, _c = comp.split("-")
@@ -531,15 +675,15 @@ def getOsComponent(name, view):
             _comp = _c
             break
 
-    if _comp is None:
-        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
+#    if _comp is None:
+#        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
 
     return _os, _comp
 
 def pollTest(view):
 
-    tJobs = [] 
-    
+    tJobs = []
+
     for url in view["urls"]:
 
         j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
@@ -599,7 +743,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 def collectBuildInfo(url):
 
-    client = newClient('server', SASL_PASS)
+    client = CLIENTS['server']
     res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -645,35 +789,17 @@ def collectAllBuildInfo():
        except Exception as ex:
            print "exception occurred during build collection: %s" % (ex)
 
-def newClient(bucket, password=None):
-    client = None
-
-    try:
-        if password is not None:
-            # attempt sasl auth
-            client = Bucket(HOST+'/'+bucket, password=password)
-        else:
-            # plain auth
-            client = Bucket(HOST+'/'+bucket)
-    except Exception as ex:
-
-        # try rbac style auth
-        endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
-        cluster = Cluster(endpoint)
-        auther = PasswordAuthenticator(bucket, password)
-        cluster.authenticate(auther)
-        client = cluster.open_bucket(bucket)
-
-    return client
 
 if __name__ == "__main__":
-
+    createClients()
     # run build collect info thread
     tBuild = Thread(target=collectAllBuildInfo)
     tBuild.start()
 
+    #get_from_bucket_and_store_build("mobile")
+    get_from_bucket_and_store_build("server")
+
     while True:
-        # keep list of all threads
         try:
             for view in VIEWS:
                 JOBS = {}
@@ -681,6 +807,7 @@ if __name__ == "__main__":
                     pollBuild(view)
                 else:
                     pollTest(view)
+            store_existing_jobs()
         except Exception as ex:
             print "exception occurred during job collection: %s" % (ex)
         time.sleep(120)
