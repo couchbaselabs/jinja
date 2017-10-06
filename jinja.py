@@ -121,7 +121,7 @@ def store_build_details(build_document, type):
     client = CLIENTS['builds']
     client.upsert(build, doc)
 
-def purge_job_details(doc_id, type):
+def purge_job_details(doc_id, type, disabled=False):
     client = CLIENTS[type]
     build_client = CLIENTS['builds']
     try:
@@ -140,9 +140,16 @@ def purge_job_details(doc_id, type):
         if to_del_job.__len__() == 0:
             return
         to_del_job = to_del_job[0]
-        to_del_job['deleted'] = True
-        build_document['totalCount'] -= to_del_job['totalCount']
-        build_document['failCount'] -= to_del_job['failCount']
+        if disabled and ('disabled' in to_del_job and not to_del_job['disabled']):
+            to_del_job['disabled'] = True
+            build_document['totalCount'] -= to_del_job['totalCount']
+            build_document['failCount'] -= to_del_job['failCount']
+        else:
+            jobs_in_name = build_document['os'][os][component][name]
+
+            to_del_job['deleted'] = True
+            #build_document['totalCount'] -= to_del_job['totalCount']
+            #build_document['failCount'] -= to_del_job['failCount']
         build_client.upsert(build, build_document)
     except Exception:
         pass

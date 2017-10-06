@@ -77,12 +77,12 @@ def purge_job_details(doc_id, type, olderBuild=False):
         if to_del_job.__len__() == 0:
             return
         to_del_job = to_del_job[0]
-        if olderBuild:
+        if olderBuild and not to_del_job['olderBuild']:
             to_del_job['olderBuild'] = True
-        else:
+            build_document['totalCount'] -= to_del_job['totalCount']
+            build_document['failCount'] -= to_del_job['failCount']
+        elif not olderBuild:
             to_del_job['deleted'] = True
-        build_document['totalCount'] -= to_del_job['totalCount']
-        build_document['failCount'] -= to_del_job['failCount']
         build_client.upsert(build, build_document)
     except Exception:
         pass
