@@ -185,7 +185,7 @@ def get_total_fail_count(document):
     for OS, os in document['os'].items():
         for COMPONENT, component in os.items():
             for JOBNAME, jobName in component.items():
-                build = pydash.find(jobName, {"deleted": False, "olderBuild": False, "disabled": False})
+                build = pydash.find(jobName, {"olderBuild": False})
                 if build:
                     totalCount += build['totalCount']
                     failCount += build['failCount']
