@@ -2,6 +2,7 @@ import re
 import sys
 import time
 import datetime
+import pydash
 import subprocess
 import os
 import requests
@@ -82,7 +83,6 @@ def store_build_details(build_document, type):
     os = build_document['os']
     component = build_document['component']
     name = build_document['name']
-
     if (type not in ALLJOBS):
         ALLJOBS[type] = {}
     if os not in ALLJOBS[type]:
@@ -113,11 +113,14 @@ def store_build_details(build_document, type):
         "failCount": build_document['failCount'],
         "color": build_document['color'] if 'color' in build_document else '',
         "deleted": False,
-        "olderBuild": False
+        "olderBuild": False,
+        "disabled": False
     }
     doc['os'][os][component][name].append(build_to_store)
-    doc['totalCount'] += build_document['totalCount']
-    doc['failCount'] += build_document['failCount']
+    pydash.sort(doc['os'][os][component][name], key=lambda item: item['build_id'], reverse=True)
+    for existing_build in existing_builds[name][1:]:
+        existing_build['olderBuild'] = True
+    get_total_fail_count(doc)
     client = CLIENTS['builds']
     client.upsert(build, doc)
 
@@ -174,6 +177,34 @@ def get_from_bucket_and_store_build(bucket):
         for job in client.n1ql_query(N1QLQuery(jobsQuery)):
             doc = job[bucket]
             store_build_details(doc, bucket)
+
+def get_total_fail_count(document):
+    totalCount = 0
+    failCount = 0
+    for OS, os in document['os'].items():
+        for COMPONENT, component in os.items():
+            for JOBNAME, jobName in component.items():
+                build = pydash.find(jobName, {"deleted": False, "olderBuild": False, "disabled": False})
+                if build:
+                    totalCount += build['totalCount']
+                    failCount += build['failCount']
+    document['totalCount'] = totalCount
+    document['failCount'] = failCount
+
+def sanitize():
+    client = CLIENTS['builds']
+    query = "select meta().id from `builds` where `build` is not null"
+    for row in client.n1ql_query(N1QLQuery(query)):
+        build_id = row['id']
+        document = client.get(build_id).value
+        for OS, os in document['os'].items():
+            for COMPONENT, component in os.items():
+                for JOBNAME, jobName in component.items():
+                    pydash.sort(jobName, key=lambda item: item['build_id'], reverse=True)
+                    for build in jobName[1:]:
+                        build['olderBuild'] = True
+        get_total_fail_count(document)
+        client.upsert(build_id, document)
 
 
 def getJS(url, params = None, retry = 5, append_api_json=True):
@@ -356,7 +387,7 @@ def purgeDisabled(job, bucket):
         oldKey = hashlib.md5(oldKey).hexdigest()
         # purge
         try:
-            purge_job_details(oldKey, bucket)
+            purge_job_details(oldKey, bucket, disabled=True)
             client.remove(oldKey)
         except Exception as ex:
             pass # delete ok
@@ -800,10 +831,11 @@ def collectAllBuildInfo():
 if __name__ == "__main__":
     createClients()
     # run build collect info thread
-    tBuild = Thread(target=collectAllBuildInfo)
-    tBuild.start()
+    #tBuild = Thread(target=collectAllBuildInfo)
+    #tBuild.start()
 
-    #get_from_bucket_and_store_build("mobile")
+    #sanitize()
+    get_from_bucket_and_store_build("mobile")
     get_from_bucket_and_store_build("server")
 
     while True:
