@@ -118,6 +118,7 @@ def store_build_details(build_document, type):
     }
     doc['os'][os][component][name].append(build_to_store)
     pydash.sort(doc['os'][os][component][name], key=lambda item: item['build_id'], reverse=True)
+    existing_builds[name][0]['olderBuild'] = False
     for existing_build in existing_builds[name][1:]:
         existing_build['olderBuild'] = True
     get_total_fail_count(doc)
