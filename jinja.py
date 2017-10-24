@@ -13,6 +13,7 @@ from couchbase.bucket import Bucket, LOCKMODE_WAIT
 from couchbase.n1ql import N1QLQuery
 from constants import *
 from urlparse import urlparse
+from test_collector import TestCaseCollector
 
 import sys
 reload(sys)
@@ -26,6 +27,7 @@ JOBS = {}
 ALLJOBS = {}
 CLIENTS = {}
 HOST = '172.23.109.74'
+TEST_CASE_COLLECTOR = TestCaseCollector()
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
@@ -68,6 +70,7 @@ def get_build_document(build, type):
             platform = SDK_PLATFORMS
             features = SDK_FEATURES
         elif type == 'build':
+            doc['type'] = 'server'
             platform =  SERVER_PLATFORMS
             features = BUILD_FEATURES
         for _platform in platform:
@@ -206,6 +209,30 @@ def sanitize():
                         build['olderBuild'] = True
         get_total_fail_count(document)
         client.upsert(build_id, document)
+
+def store_test_cases(job_details):
+    """
+    Store the test cases that were run as part of the Job and their results into test case repository
+    :param job_details: Details of the job that was run.
+    :return: nothing
+    """
+    # Return if the job was aborted, since no test results can be obtained from aborted runs.
+    if job_details['result'] in ["ABORTED", "FAILURE"]:
+        return
+    url = job_details['url'] + job_details['build_id'].__str__() + "/testReport"
+    test_results = getJS(url)
+    if test_results is None:
+        return
+    if "suites" not in test_results:
+        return
+    for suite in test_results['suites']:
+        if 'cases' not in suite:
+            continue
+        for case in suite['cases']:
+            # if "conf_file" not in case['name']:
+            #     print case['name']
+            #     continue
+            TEST_CASE_COLLECTOR.store_test_result(case, job_details)
 
 
 def getJS(url, params = None, retry = 5, append_api_json=True):
@@ -507,6 +534,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                     continue
 
                 pseudoName = str(osParam+"-"+componentParam+"_"+subComponentParam)
+                doc['subComponent'] = subComponentParam
                 doc["name"] = pseudoName
                 nameOrig = pseudoName
                 _os, _comp = getOsComponent(pseudoName, view)
@@ -533,6 +561,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if caveat_should_skip_mobile(doc):
                 continue
 
+            store_test_cases(doc)
             store_build_details(doc, bucket)
 
             histKey = doc["name"]+"-"+doc["build"]
@@ -836,8 +865,10 @@ if __name__ == "__main__":
     #tBuild.start()
 
     #sanitize()
-    get_from_bucket_and_store_build("mobile")
-    get_from_bucket_and_store_build("server")
+    #get_from_bucket_and_store_build("mobile")
+    #get_from_bucket_and_store_build("server")
+    TEST_CASE_COLLECTOR.create_client()
+    #TEST_CASE_COLLECTOR.store_tests()
 
     while True:
         try:
