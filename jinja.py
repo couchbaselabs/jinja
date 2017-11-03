@@ -97,7 +97,10 @@ def store_build_details(build_document, type):
         "url": build_document['url'],
         "priority": build_document['priority']
     }
-
+    if os not in doc['os']:
+        doc['os'][os] = {}
+    if component not in doc['os'][os]:
+        doc['os'][os][component] = {}
     existing_builds = doc['os'][os][component]
     if name in existing_builds:
         build_exist = [t for t in existing_builds[name] if t['build_id'] == build_document['build_id']]
@@ -561,7 +564,8 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if caveat_should_skip_mobile(doc):
                 continue
 
-            store_test_cases(doc)
+            if bucket == "server":
+                store_test_cases(doc)
             store_build_details(doc, bucket)
 
             histKey = doc["name"]+"-"+doc["build"]
@@ -868,7 +872,7 @@ if __name__ == "__main__":
     #get_from_bucket_and_store_build("mobile")
     #get_from_bucket_and_store_build("server")
     TEST_CASE_COLLECTOR.create_client()
-    #TEST_CASE_COLLECTOR.store_tests()
+    TEST_CASE_COLLECTOR.store_tests()
 
     while True:
         try:
