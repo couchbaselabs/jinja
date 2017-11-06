@@ -11,14 +11,14 @@ import pydash
 from couchbase.bucket import Bucket, LOCKMODE_WAIT
 from couchbase.n1ql import N1QLQuery
 
-HOST = '10.111.170.102'
-#HOST = '172.23.109.74'
+#HOST = '10.111.170.102'
+HOST = '172.23.109.74'
 CLIENT = {}
 testRunnerDir = "/tmp/TestRunner/testrunner"
 testRunnerRepo = "http://github.com/couchbase/testrunner"
 CONF = "conf"
 PYTESTS = "pytests"
-BUCKET = "test"
+BUCKET = "test1"
 TESTS_RESULT_LIMIT = 50
 
 class TestCaseDocument(object):
@@ -48,7 +48,7 @@ class TestCaseCollector:
 
     def create_client(self):
         try:
-            client = Bucket("couchbase://{0}/test".format(HOST), lockmode=LOCKMODE_WAIT)
+            client = Bucket("couchbase://{0}/{1}".format(HOST, BUCKET), lockmode=LOCKMODE_WAIT)
             CLIENT[BUCKET] = client
         except Exception as e:
             print e
@@ -218,14 +218,14 @@ class TestCaseCollector:
         if index == -1:
             return None
         name = test_cases[index]
-        name.pop("testLine")
+        self.remove_unwanted_fields(name)
         return hashlib.md5(json.dumps(name, sort_keys=True)).hexdigest()
 
     def store_test_result(self, test_result, build_details):
         test_case_id = self.get_test_case_id(test_result)
         if not test_case_id:
             return
-        client = CLIENT['test']
+        client = CLIENT[BUCKET]
         try:
             document = client.get(test_case_id).value
             os = build_details['os']
