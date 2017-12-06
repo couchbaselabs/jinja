@@ -13,7 +13,8 @@ MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
-    "LWW-LWW",
+    "EVENTING-EVENTING",
+    "IPV6-IPV6",
     "RBAC-RBAC",
     "PLASMA-PLASMA",
     "IMPORT-IMPORT_EXPORT",
@@ -49,6 +50,7 @@ SERVER_FEATURES = [
     "VIEW-VIEW",
     "QUERY-QUERY",
     "GOXDCR-GOXDCR",
+    "LWW-GOXDCR",
     "FOREST-FORESTDB",
     "XDCR-XDCR",
     "REB-NSERV",
