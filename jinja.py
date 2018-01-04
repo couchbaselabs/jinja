@@ -26,7 +26,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 JOBS = {}
 ALLJOBS = {}
 CLIENTS = {}
-HOST = '172.23.109.74'
+HOST = '172.23.98.63'
 TEST_CASE_COLLECTOR = TestCaseCollector()
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -46,6 +46,11 @@ def createClients():
         CLIENTS['builds'] = client
     except Exception:
         print "Error while connecting to {0}/{1}".format(HOST, "builds")
+    try:
+        client = Bucket("couchbase://{0}/{1}".format(HOST, "QE-Test-Suites"), lockmode=LOCKMODE_WAIT)
+        CLIENTS['testSuites'] = client
+    except Exception:
+        print "Error while connecting to {0}/{1}".format(HOST, "QE-Test-Suites")
 
 def get_build_document(build, type):
     client = CLIENTS['builds']
@@ -86,6 +91,8 @@ def store_build_details(build_document, type):
     os = build_document['os']
     component = build_document['component']
     name = build_document['name']
+    sub_component = build_document['subComponent'] if "subComponent" in build_document else ""
+    implemented_in = getImplementedIn(component, sub_component)
     if (type not in ALLJOBS):
         ALLJOBS[type] = {}
     if os not in ALLJOBS[type]:
@@ -95,7 +102,8 @@ def store_build_details(build_document, type):
     ALLJOBS[type][os][component][name] = {
         "totalCount": build_document['totalCount'],
         "url": build_document['url'],
-        "priority": build_document['priority']
+        "priority": build_document['priority'],
+        "implementedIn": implemented_in
     }
     if os not in doc['os']:
         doc['os'][os] = {}
@@ -353,6 +361,14 @@ def getClaimReason(actions):
         pass
 
     return reason
+def getImplementedIn(component, subcomponent):
+    client = CLIENTS['testSuites']
+    query = "SELECT implementedIn from `QE-Test-Suites` where component = '{0}' and subcomponent = '{1}'".format(component.lower(), subcomponent)
+    for row in client.n1ql_query(N1QLQuery(query)):
+	if 'implementedIn' not in row:
+		return ""
+        return row['implementedIn']
+    return ""
 
 # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
 def caveat_swap_xdcr(doc):
@@ -458,7 +474,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
         if isExecutor(doc["name"]):
             # include more history
-            start = bids[0]-300
+            start = bids[0]-500
             if start > 0:
                 bids = range(start, bids[0]+1)
             bids.reverse()
@@ -564,8 +580,8 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if caveat_should_skip_mobile(doc):
                 continue
 
-            if bucket == "server":
-                store_test_cases(doc)
+            #if bucket == "server":
+            #    store_test_cases(doc)
             store_build_details(doc, bucket)
 
             histKey = doc["name"]+"-"+doc["build"]
@@ -871,8 +887,8 @@ if __name__ == "__main__":
     #sanitize()
     #get_from_bucket_and_store_build("mobile")
     #get_from_bucket_and_store_build("server")
-    TEST_CASE_COLLECTOR.create_client()
-    TEST_CASE_COLLECTOR.store_tests()
+    #TEST_CASE_COLLECTOR.create_client()
+    #TEST_CASE_COLLECTOR.store_tests()
 
     while True:
         try:

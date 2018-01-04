@@ -11,7 +11,7 @@ sys.setdefaultencoding('utf8')
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 BUCKETS = ['server', 'mobile', 'sdk']
-HOST = 'couchbase://172.23.109.74'
+HOST = '172.23.98.63'
 JENKINS_URLS = ["http://qa.sc.couchbase.com/",
                 #"http://qa.hq.northscale.net/",
                 "http://ci.sc.couchbase.com/",
@@ -101,7 +101,10 @@ def purge():
     query = "SELECT meta().id FROM {0}".format(BUILDS_BUCKET)
     for row in client.n1ql_query(N1QLQuery(query)):
         doc_id = row['id']
-        doc = client.get(doc_id)
+        doc = client.get(doc_id).value
+	if 'os' not in doc:
+		print "OS not in document {}".format(doc_id)
+		continue;
         for OS in doc['os']:
             for component in doc['os'][OS]:
                 for job in doc['os'][OS][component]:
@@ -120,6 +123,7 @@ def purge():
                                 continue
                         if len(existing_builds) <= 1 or build == latest_build:
                             continue
+			print "Marking {0}/{1} as deleted in {2}".format(url, build_id, doc_id)
                         build['deleted'] = True
                         if not build['olderBuild']:
                             build['olderBuild'] = True
@@ -147,6 +151,7 @@ def update_counts(document):
 
 
 if __name__ == "__main__":
+    create_clients()
     while True:
         try:
             purge()
