@@ -1,35 +1,22 @@
 import re
-import sys
 import time
-import datetime
 import pydash
-import subprocess
-import os
 import requests
 import hashlib
-import json
 from threading import Thread
 from couchbase.bucket import Bucket, LOCKMODE_WAIT
 from couchbase.n1ql import N1QLQuery
 from constants import *
-from urlparse import urlparse
 from test_collector import TestCaseCollector
+import ConfigParser
 
 import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-UBER_USER = os.environ.get('UBER_USER') or ""
-UBER_PASS = os.environ.get('UBER_PASS') or ""
-
-
 JOBS = {}
 ALLJOBS = {}
 CLIENTS = {}
-HOST = '172.23.98.63'
-TEST_CASE_COLLECTOR = TestCaseCollector()
-if len(sys.argv) == 2:
-    HOST = sys.argv[1]
 
 def createClients():
     for view in VIEWS:
@@ -879,6 +866,11 @@ def collectAllBuildInfo():
 
 
 if __name__ == "__main__":
+    config = ConfigParser.ConfigParser()
+    config.read("config.cfg")
+    HOST = config.get("CouchbaseServer", "hostName")
+
+    TEST_CASE_COLLECTOR = TestCaseCollector(config)
     createClients()
     # run build collect info thread
     #tBuild = Thread(target=collectAllBuildInfo)

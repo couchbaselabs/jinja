@@ -1,25 +1,21 @@
 import difflib
 import hashlib
 import json
-import os
 import re
 import shutil
-from difflib import SequenceMatcher
+import time
+import ConfigParser
+from os import path
+from os import walk
 
 import git
 import pydash
-from couchbase.bucket import Bucket, LOCKMODE_WAIT
+
+from couchbase.bucket import LOCKMODE_WAIT
+from couchbase.cluster import Cluster
+from couchbase.cluster import PasswordAuthenticator
 from couchbase.n1ql import N1QLQuery
 
-#HOST = '10.111.170.102'
-HOST = '172.23.109.74'
-CLIENT = {}
-testRunnerDir = "/tmp/TestRunner/testrunner"
-testRunnerRepo = "http://github.com/couchbase/testrunner"
-CONF = "conf"
-PYTESTS = "pytests"
-BUCKET = "test1"
-TESTS_RESULT_LIMIT = 50
 
 class TestCaseDocument(object):
     def __init__(self):
@@ -36,56 +32,41 @@ class TestCaseDocument(object):
         self.deleted = False
         self.change_history = []
 
-class TestCaseCollector:
 
-    def __init__(self):
-        if os.path.exists(testRunnerDir):
-            #shutil.rmtree(testRunnerDir)
-            self.testRunnerRepo = git.Repo.init(testRunnerDir)
+class TestCaseCollector:
+    def __init__(self, user_config):
+        test_runner_repo = user_config.get("TestCollector", "testRunnerRepo")
+        test_runner_branch = user_config.get("TestCollector", "testRunnerBranch")
+
+        self.client = dict()
+
+        self.cbServerHost = user_config.get("CouchbaseServer", "hostName")
+        self.cbUsername = user_config.get("CouchbaseServer", "username")
+        self.cbPassword = user_config.get("CouchbaseServer", "password")
+
+        self.bucketName = user_config.get("TestCollector", "bucketName")
+        self.testRunnerDir = user_config.get("TestCollector", "testRunnerDir")
+        self.confDir = user_config.get("TestCollector", "confDir")
+
+        if path.exists(self.testRunnerDir):
+            self.testRunnerRepo = git.Repo(self.testRunnerDir)
+            origin = self.testRunnerRepo.remotes.origin
+            origin.pull()
         else:
-            self.testRunnerRepo = git.Repo.clone_from(testRunnerRepo, testRunnerDir)
+            shutil.rmtree(self.testRunnerDir, ignore_errors=True)
+            self.testRunnerRepo = git.Repo.clone_from(test_runner_repo, self.testRunnerDir, branch=test_runner_branch)
         self.currentHead = self.testRunnerRepo.head.commit
 
     def create_client(self):
-        try:
-            client = Bucket("couchbase://{0}/{1}".format(HOST, BUCKET), lockmode=LOCKMODE_WAIT)
-            CLIENT[BUCKET] = client
-        except Exception as e:
-            print e
-
-    # def store_tests(self):
-    #     for root, sub_dirs, files in os.walk(os.path.join(testRunnerDir, "conf")):
-    #         for confFile in files:
-    #             if ".conf" not in confFile:
-    #                 continue
-    #             file_path = os.path.join(root, confFile)
-    #             conf_file = file_path[file_path.find("conf/") + len("conf/"):]
-    #             file_history = list(self.testRunnerRepo.iter_commits(file_path))
-    #             test_cases = self.get_test_cases_from_conf(file_path)
-    #             for test_case in test_cases:
-    #                 testCase = TestCaseDocument()
-    #                 testCase.testName = test_case['testName']
-    #                 testCase.className = test_case['className']
-    #                 conf = {'conf': conf_file, 'commented': test_case['commented'], "testLine": test_case['testLine']}
-    #                 testCase.confFile = [conf]
-    #                 self.remove_unwanted_fields(test_case)
-    #                 history = {}
-    #                 history['author'] = file_history[-1].committer.name
-    #                 history['commit_date'] = file_history[-1].committed_datetime.__str__()
-    #                 history['commit_time'] = file_history[-1].committed_date
-    #                 testCase.change_history = [history]
-    #                 document_key = hashlib.md5(json.dumps(test_case, sort_keys=True)).hexdigest()
-    #                 client = CLIENT[BUCKET]
-    #                 existing_document = None
-    #                 try:
-    #                     existing_document = client.get(document_key).value
-    #                 except:
-    #                     pass
-    #                 to_upsert = testCase.__dict__
-    #                 if existing_document:
-    #                     pydash.merge_with(to_upsert, existing_document, TestCaseCollector._merge_dict)
-    #                 client.upsert(document_key, to_upsert)
-    #
+        cb_cluster = Cluster("couchbase://{0}". format(self.cbServerHost))
+        cb_cluster.authenticate(PasswordAuthenticator(self.cbUsername, self.cbPassword))
+        while True:
+            try:
+                self.client[self.bucketName] = cb_cluster.open_bucket(self.bucketName, lockmode=LOCKMODE_WAIT)
+                break
+            except Exception as exception:
+                print(exception)
+            time.sleep(10)
 
     def get_test_case_from_test_result(self, test_result):
         class_name = test_result["className"]
@@ -96,7 +77,7 @@ class TestCaseCollector:
         return test_case
 
     def get_test_cases_from_conf(self, conf_file):
-        conf_file_path = os.path.join(testRunnerDir, CONF, conf_file)
+        conf_file_path = path.join(self.testRunnerDir, CONF, conf_file)
         test_cases_dict = []
         try:
             with file(conf_file_path, 'r') as f:
@@ -158,26 +139,30 @@ class TestCaseCollector:
         test_cases = []
         class_name = ""
         for line in blob.splitlines():
-            stripped = line.strip()
-            name = stripped
+            name = line.strip()
             commented = False
             if name.startswith("#"):
                 commented = True
-                name = name.replace("#", "", 1).strip()
+                name = name.lstrip("#").strip()
+
+            # Get class name and if class name is 'params' then continue
             if name.endswith(":"):
                 class_name = name.split(":")[0]
                 continue
+
             if class_name and class_name.lower() == "params":
                 continue
-            if line.startswith(" ") and class_name:
+
+            if class_name and line.startswith(" "):
                 name = class_name + "." + name
+
             if commented and not self.check_if_test(name):
                 continue
+
             class_name = ".".join(name.split(",")[0].split('.')[0:-1])
             if commented:
-                name = "#{}".format(name)
-            if name:
-                test_cases.append(name)
+                name = "# " + name
+            test_cases.append(name)
         return test_cases
 
     def get_conf_from_store(self, test_case_to_find):
@@ -257,29 +242,60 @@ class TestCaseCollector:
         except Exception as e:
             print e
 
+    #             file_history = list(self.testRunnerRepo.iter_commits(file_path))
+    #             test_cases = self.get_test_cases_from_conf(file_path)
+    #             for test_case in test_cases:
+    #                 testCase = TestCaseDocument()
+    #                 testCase.testName = test_case['testName']
+    #                 testCase.className = test_case['className']
+    #                 conf = {'conf': conf_file, 'commented': test_case['commented'], "testLine": test_case['testLine']}
+    #                 testCase.confFile = [conf]
+    #                 self.remove_unwanted_fields(test_case)
+    #                 history = {}
+    #                 history['author'] = file_history[-1].committer.name
+    #                 history['commit_date'] = file_history[-1].committed_datetime.__str__()
+    #                 history['commit_time'] = file_history[-1].committed_date
+    #                 testCase.change_history = [history]
+    #                 document_key = hashlib.md5(json.dumps(test_case, sort_keys=True)).hexdigest()
+    #                 client = CLIENT[BUCKET]
+    #                 existing_document = None
+    #                 try:
+    #                     existing_document = client.get(document_key).value
+    #                 except:
+    #                     pass
+    #                 to_upsert = testCase.__dict__
+    #                 if existing_document:
+    #                     pydash.merge_with(to_upsert, existing_document, TestCaseCollector._merge_dict)
+    #                 client.upsert(document_key, to_upsert)
+    #
+
     def store_tests(self):
-        for root, sub_dirs, files in os.walk(os.path.join(testRunnerDir, "conf")):
-            for confFile in files:
-                if ".conf" not in confFile:
+        for root, sub_dirs, files in walk(path.join(self.testRunnerDir, self.confDir)):
+            for conf_file in files:
+                if not conf_file.endswith(".conf")
                     continue
-                file_path = os.path.join(root, confFile)
-                conf_file = file_path[file_path.find("conf/") + len("conf/"):]
+
+                file_path = path.join(root, conf_file)
                 file_history = list(self.testRunnerRepo.iter_commits(paths=file_path))
-                # Store the first commit
+
+                # Storing commit info for the current conf_file
                 first_commit = file_history[-1]
                 parent_commit = first_commit.parents[0]
                 first_diff = parent_commit.diff(first_commit, file_path)[0]
-                inital_blob = first_diff.b_blob.data_stream.read()
-                initial_test_cases = self.get_test_cases_from_blob(inital_blob)
+
+                initial_blob = first_diff.b_blob.data_stream.read()
+                initial_test_cases = self.get_test_cases_from_blob(initial_blob)
+
                 for test_case in initial_test_cases:
                     self.update_new_test_case(test_case, first_commit, conf_file)
-                # Now store the rest of the history
-                file_history.reverse()
-                for index, history in enumerate(file_history[1:]):
-                    old_commit = file_history[index]
-                    new_commit = history
-                    diffs = self.get_diff_between_commits(old_commit, new_commit, file_path)
-                    self.store_test_cases_in_diffs(diffs)
+
+                ## Now store the rest of the history
+                # file_history.reverse()
+                # for index, history in enumerate(file_history[1:]):
+                #    old_commit = file_history[index]
+                #    new_commit = history
+                #    diffs = self.get_diff_between_commits(old_commit, new_commit, file_path)
+                #    self.store_test_cases_in_diffs(diffs)
 
     def get_diff_between_commits(self, old_commit, new_commit, path):
         diffs = old_commit.diff(new_commit, path, create_patch=True)
@@ -341,7 +357,7 @@ class TestCaseCollector:
         if old_head_commit == current_head_commit:
             # No update to repository.
             return False, None
-        diff = self.get_diff_between_commits(old_head_commit, current_head_commit, os.path.join(testRunnerDir, "conf"))
+        diff = self.get_diff_between_commits(old_head_commit, current_head_commit, path.join(testRunnerDir, "conf"))
         if not diff:
             return False, None
         return True, diff
@@ -566,8 +582,11 @@ class TestCaseCollector:
             pydash.remove(conf, lambda x: x['conf'] == _new_conf['conf'])
         conf.extend(new_conf)
 
-        #
-# if __name__ == "__main__":
-#     test_case_collector = TestCaseCollector()
-#     #create_client()
-#     test_case_collector.store_tests()
+
+if __name__ == "__main__":
+    config = ConfigParser.ConfigParser()
+    config.read("config.cfg")
+
+    test_case_collector = TestCaseCollector(config)
+    test_case_collector.create_client()
+    test_case_collector.store_tests()
