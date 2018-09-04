@@ -1,20 +1,25 @@
-import difflib
 import hashlib
 import json
 import re
 import shutil
-import time
 import ConfigParser
+
+from difflib import SequenceMatcher
+from difflib import ndiff
+
 from os import path
 from os import walk
 
 import git
 import pydash
 
+from couchbase import set_json_converters as cb_set_json_converters
 from couchbase.bucket import LOCKMODE_WAIT
 from couchbase.cluster import Cluster
 from couchbase.cluster import PasswordAuthenticator
 from couchbase.n1ql import N1QLQuery
+
+cb_set_json_converters(json.dumps, json.loads)
 
 
 class TestCaseDocument(object):
@@ -24,7 +29,7 @@ class TestCaseDocument(object):
         self.priority = ""
         self.component = ""
         self.subComponent = ""
-        self.os = {}
+        self.os = dict()
         self.confFile = []
         self.changed = False
         self.newChangedDocId = ""
@@ -35,11 +40,6 @@ class TestCaseDocument(object):
 
 class TestCaseCollector:
     def __init__(self, user_config):
-        test_runner_repo = user_config.get("TestCollector", "testRunnerRepo")
-        test_runner_branch = user_config.get("TestCollector", "testRunnerBranch")
-
-        self.client = dict()
-
         self.cbServerHost = user_config.get("CouchbaseServer", "hostName")
         self.cbUsername = user_config.get("CouchbaseServer", "username")
         self.cbPassword = user_config.get("CouchbaseServer", "password")
@@ -48,25 +48,43 @@ class TestCaseCollector:
         self.testRunnerDir = user_config.get("TestCollector", "testRunnerDir")
         self.confDir = user_config.get("TestCollector", "confDir")
 
+        self.client = dict()
+        self.testResultLimit = 50
+
+        # Variables used in local scope
+        test_runner_branch = user_config.get("TestCollector", "testRunnerBranch")
+        test_runner_repo_link = user_config.get("TestCollector", "testRunnerRepo")
+
+        # If exists, pull repo for latest changes, else clone repo locally
         if path.exists(self.testRunnerDir):
-            self.testRunnerRepo = git.Repo(self.testRunnerDir)
-            origin = self.testRunnerRepo.remotes.origin
-            origin.pull()
+            self.testRunnerRepo = git.Repo.init(self.testRunnerDir)
+            # origin = self.testRunnerRepo.remotes.origin
+            # origin.pull()
         else:
-            shutil.rmtree(self.testRunnerDir, ignore_errors=True)
-            self.testRunnerRepo = git.Repo.clone_from(test_runner_repo, self.testRunnerDir, branch=test_runner_branch)
+            shutil.rmtree(self.testRunnerDir)
+            self.testRunnerRepo = git.Repo.clone_from(test_runner_repo_link, self.testRunnerDir,
+                                                      branch=test_runner_branch)
+
+        # Point the head to current repo's head
         self.currentHead = self.testRunnerRepo.head.commit
 
     def create_client(self):
-        cb_cluster = Cluster("couchbase://{0}". format(self.cbServerHost))
-        cb_cluster.authenticate(PasswordAuthenticator(self.cbUsername, self.cbPassword))
-        while True:
-            try:
-                self.client[self.bucketName] = cb_cluster.open_bucket(self.bucketName, lockmode=LOCKMODE_WAIT)
-                break
-            except Exception as exception:
-                print(exception)
-            time.sleep(10)
+        client_creation_success = True
+        try:
+            cb_cluster = Cluster("couchbase://{0}". format(self.cbServerHost))
+            cb_cluster.authenticate(PasswordAuthenticator(self.cbUsername, self.cbPassword))
+        except Exception as exception:
+            print("Error while connecting to couchbase cluster couchbase://{0}".format(self.cbServerHost))
+            client_creation_success = False
+            return client_creation_success
+
+        try:
+            client = cb_cluster.open_bucket(self.bucketName, lockmode=LOCKMODE_WAIT)
+            self.client[self.bucketName] = client
+        except Exception as exception:
+            print("Error while creating bucket client for {0}".format(self.bucketName))
+            client_creation_success = False
+        return client_creation_success
 
     def get_test_case_from_test_result(self, test_result):
         class_name = test_result["className"]
@@ -77,7 +95,7 @@ class TestCaseCollector:
         return test_case
 
     def get_test_cases_from_conf(self, conf_file):
-        conf_file_path = path.join(self.testRunnerDir, CONF, conf_file)
+        conf_file_path = path.join(self.testRunnerDir, self.confDir, conf_file)
         test_cases_dict = []
         try:
             with file(conf_file_path, 'r') as f:
@@ -87,31 +105,42 @@ class TestCaseCollector:
                     if test_case:
                         test_cases_dict.append(test_case)
         except Exception as e:
-            print e
+            print("Get test case from conf: {0}".format(e))
         return test_cases_dict
 
     def get_test_case_from_line(self, line, class_name):
-        stripped = line.strip()
-        if len(stripped) <= 0:
-            return class_name, None
-        name = stripped
+        name = line.strip()
         commented = False
+
+        if len(name) <= 0:
+            return class_name, None
+
         if name.startswith("#"):
             commented = True
-            name = name.replace("#", '', 1).strip()
+            name = name.lstrip("#").strip()
+
         if name.endswith(":"):
             class_name = name.split(":")[0]
             return class_name, None
+
         if class_name and class_name.lower() == "params":
             return class_name, None
-        elif line.startswith(" ") and class_name:
+        elif class_name and line.startswith(" "):
             name = class_name + "." + name
+
         if commented and not self.check_if_test(name):
             return class_name, None
-        class_name = ".".join(name.split(",")[0].split('.')[0:-1])
+
+        test_name = name.split(",")[0]
+        class_name = ".".join(test_name.split('.')[0:-1])
+
         test_case = dict(item.split("=", 1) if "=" in item else [item, ''] for item in name.split(",")[1:])
-        test_case['testName'] = name.split(",")[0]
-        test_case['testLine'] = name[name.find(class_name) + len(class_name) + 1:]
+        if len(class_name) != 0:
+            test_case['testLine'] = name[name.find(class_name) + len(class_name) + 1:]
+        else:
+            test_case['testLine'] = name[name.find(class_name) + len(class_name):]
+
+        test_case['testName'] = test_name
         test_case['className'] = class_name
         test_case['commented'] = commented
         return class_name, test_case
@@ -159,18 +188,20 @@ class TestCaseCollector:
             if commented and not self.check_if_test(name):
                 continue
 
-            class_name = ".".join(name.split(",")[0].split('.')[0:-1])
             if commented:
                 name = "# " + name
-            test_cases.append(name)
+
+            # Add test case to list only if non-empty string
+            if name:
+                test_cases.append(name)
         return test_cases
 
     def get_conf_from_store(self, test_case_to_find):
         class_name = test_case_to_find['className']
         test_name = test_case_to_find['testName']
         query = "SELECT confFile, testName, className from {0} where testName = '{1}' and className = '{2}'".format(
-            BUCKET, test_name, class_name)
-        client = CLIENT[BUCKET]
+            self.bucketName, test_name, class_name)
+        client = self.client[self.bucketName]
         for row in client.n1ql_query(N1QLQuery(query)):
             conf_files = row['confFile']
             for entry in conf_files:
@@ -178,7 +209,10 @@ class TestCaseCollector:
                 class_name = ".".join(test_line.split(",")[0].split('.')[0:-1])
                 test_case = dict(item.split("=", 1) if "=" in item else [item, ''] for item in test_line.split(",")[1:])
                 test_case['testName'] = row['testName']
-                test_case['testLine'] = test_line[test_line.find(class_name) + len(class_name) + 1:]
+                if len(class_name) != 0:
+                    test_case['testLine'] = test_line[test_line.find(class_name) + len(class_name) + 1:]
+                else:
+                    test_case['testLine'] = test_line[test_line.find(class_name) + len(class_name):]
                 test_case['className'] = row['className']
                 if set(test_case.items()).issubset(set(test_case_to_find.items())):
                     return entry['conf']
@@ -187,16 +221,19 @@ class TestCaseCollector:
     def get_test_case_id(self, test_result):
         test_case = self.get_test_case_from_test_result(test_result)
         conf_file = test_case['conf_file'] if 'conf_file' in test_case else self.get_conf_from_store(test_case)
+        conf_dir_path = self.confDir + "/"
         if not conf_file:
             return
-        if "conf/" in conf_file:
-            conf_file = conf_file.replace("conf/", '')
+        if conf_dir_path in conf_file:
+            conf_file = conf_file.replace(conf_dir_path, '')
         test_cases = self.get_test_cases_from_conf(conf_file)
         test_cases_clone = pydash.clone_deep(test_cases)
+
         def remove_group(x):
             pydash.unset(x, 'GROUP')
             pydash.unset(x, 'commented')
             pydash.unset(x, 'testLine')
+
         test_cases_dict_without_groups = pydash.for_each(test_cases_clone, remove_group)
         callback = lambda x: set(x.items()).issubset(set(test_case.items()))
         index = pydash.find_index(test_cases_dict_without_groups, callback)
@@ -210,7 +247,7 @@ class TestCaseCollector:
         test_case_id = self.get_test_case_id(test_result)
         if not test_case_id:
             return
-        client = CLIENT[BUCKET]
+        client = self.client[self.bucketName]
         try:
             document = client.get(test_case_id).value
             os = build_details['os']
@@ -227,7 +264,7 @@ class TestCaseCollector:
             already_updated = pydash.some(tests, lambda test: test['build'] == build and test['build_id'] == build_id)
             if already_updated:
                 return
-            test = {}
+            test = dict()
             test['build_id'] = build_id
             test['build'] = build
             test['result'] = test_result['status']
@@ -235,13 +272,20 @@ class TestCaseCollector:
             test['errorStackTrace'] = test_result['errorStackTrace']
             test['url'] = build_details['url']
             """ Trim tests to store only TESTS_RESULT_LIMIT tests results"""
-            if len(tests) > TESTS_RESULT_LIMIT - 1:
-                tests = tests[len(tests) - TESTS_RESULT_LIMIT + 1:]
+            if len(tests) > self.testResultLimit - 1:
+                tests = tests[len(tests) - self.testResultLimit + 1:]
             tests.append(test)
             client.upsert(test_case_id, document)
         except Exception as e:
-            print e
+            print("Store test result: {0}".format(e))
 
+    # def store_tests(self):
+    #     for root, sub_dirs, files in walk(path.join(self.testRunnerDir, "conf")):
+    #         for confFile in files:
+    #             if ".conf" not in confFile:
+    #                 continue
+    #             file_path = path.join(root, confFile)
+    #             conf_file = file_path[file_path.find("conf/") + len("conf/"):]
     #             file_history = list(self.testRunnerRepo.iter_commits(file_path))
     #             test_cases = self.get_test_cases_from_conf(file_path)
     #             for test_case in test_cases:
@@ -251,13 +295,13 @@ class TestCaseCollector:
     #                 conf = {'conf': conf_file, 'commented': test_case['commented'], "testLine": test_case['testLine']}
     #                 testCase.confFile = [conf]
     #                 self.remove_unwanted_fields(test_case)
-    #                 history = {}
+    #                 history = dict()
     #                 history['author'] = file_history[-1].committer.name
     #                 history['commit_date'] = file_history[-1].committed_datetime.__str__()
     #                 history['commit_time'] = file_history[-1].committed_date
     #                 testCase.change_history = [history]
     #                 document_key = hashlib.md5(json.dumps(test_case, sort_keys=True)).hexdigest()
-    #                 client = CLIENT[BUCKET]
+    #                 client = self.client[self.bucketName]
     #                 existing_document = None
     #                 try:
     #                     existing_document = client.get(document_key).value
@@ -272,42 +316,57 @@ class TestCaseCollector:
     def store_tests(self):
         for root, sub_dirs, files in walk(path.join(self.testRunnerDir, self.confDir)):
             for conf_file in files:
-                if not conf_file.endswith(".conf")
+                if not conf_file.endswith(".conf"):
                     continue
 
                 file_path = path.join(root, conf_file)
+                conf_file = path.basename(file_path)
                 file_history = list(self.testRunnerRepo.iter_commits(paths=file_path))
 
-                # Storing commit info for the current conf_file
+                # First commit when conf_file was created
                 first_commit = file_history[-1]
+
+                # Previous commit of first_commit in git log
                 parent_commit = first_commit.parents[0]
+
+                """
+                conf/py-1node-sanity.conf
+                =======================================================
+                lhs: None
+                rhs: 100644 | 794752153a9aa866c150c8b7074a343036bfe99f
+                file added in rhs
+                """
                 first_diff = parent_commit.diff(first_commit, file_path)[0]
 
+                # File blob content with respect to commit
                 initial_blob = first_diff.b_blob.data_stream.read()
+
+                # Returns test case list from the commit change
                 initial_test_cases = self.get_test_cases_from_blob(initial_blob)
 
                 for test_case in initial_test_cases:
                     self.update_new_test_case(test_case, first_commit, conf_file)
 
-                ## Now store the rest of the history
-                # file_history.reverse()
-                # for index, history in enumerate(file_history[1:]):
-                #    old_commit = file_history[index]
-                #    new_commit = history
-                #    diffs = self.get_diff_between_commits(old_commit, new_commit, file_path)
-                #    self.store_test_cases_in_diffs(diffs)
+                # Now store the rest of the history
+                file_history.reverse()
+                for index, history in enumerate(file_history[1:]):
+                    old_commit = file_history[index]
+                    new_commit = history
+                    diffs = self.get_diff_between_commits(old_commit, new_commit, file_path)
+                    self.store_test_cases_in_diffs(diffs)
 
-    def get_diff_between_commits(self, old_commit, new_commit, path):
-        diffs = old_commit.diff(new_commit, path, create_patch=True)
+    def get_diff_between_commits(self, old_commit, new_commit, file_path):
+        diffs = old_commit.diff(new_commit, file_path, create_patch=True)
         if len(diffs) == 0:
             return None
-        diff = {}
+        diff = dict()
         diff['old_commit'] = old_commit
         diff['new_commit'] = new_commit
         diff['diff'] = diffs
         return diff
 
     def store_test_cases_in_diffs(self, diffs):
+        conf_dir_path = self.confDir + "/"
         for diff in diffs['diff']:
             if not diff.a_blob and not diff.b_blob:
                 # if both blobs are not available, just continue with other differences
@@ -316,7 +375,7 @@ class TestCaseCollector:
             if not diff.a_blob:
                 # If first blob is not available, then this is a new addition of file. Do addition of testcases
                 conf = diff.b_path
-                conf = conf[conf.find("conf/") + len("conf/"):]
+                conf = conf[conf.find(conf_dir_path) + len(conf_dir_path):]
                 b_blob = diff.b_blob.data_stream.read()
                 b_test_cases = self.get_test_cases_from_blob(b_blob)
                 for test_case in b_test_cases:
@@ -325,21 +384,21 @@ class TestCaseCollector:
             if not diff.b_blob:
                 # If second blob is not available, then the conf file was deleted. Do removal of testcases
                 conf = diff.a_path
-                conf = conf[conf.find("conf/") + len("conf/"):]
+                conf = conf[conf.find(conf_dir_path) + len(conf_dir_path):]
                 a_blob = diff.a_blob.data_stream.read()
                 a_test_cases = self.get_test_cases_from_blob(a_blob)
                 for test_case in a_test_cases:
                     self.update_deleted_test_case(test_case, new_commit, conf)
                 continue
             conf = diff.b_path
-            conf = conf[conf.find("conf/") + len("conf/"):]
+            conf = conf[conf.find(conf_dir_path) + len(conf_dir_path):]
             a_blob = diff.a_blob.data_stream.read()
             b_blob = diff.b_blob.data_stream.read()
             a_test_cases = self.get_test_cases_from_blob(a_blob)
             b_test_cases = self.get_test_cases_from_blob(b_blob)
             a_test_cases = ["{}\n".format(line) for line in a_test_cases if line]
             b_test_cases = ["{}\n".format(line) for line in b_test_cases if line]
-            diff_blob = list(difflib.ndiff(a_test_cases, b_test_cases))
+            diff_blob = list(ndiff(a_test_cases, b_test_cases))
             test_cases_removed, test_cases_added, test_cases_modified = TestCaseCollector.get_diffs(diff_blob)
             for test_case_removed in test_cases_removed:
                 self.update_deleted_test_case(test_case_removed, new_commit, conf)
@@ -357,7 +416,7 @@ class TestCaseCollector:
         if old_head_commit == current_head_commit:
             # No update to repository.
             return False, None
-        diff = self.get_diff_between_commits(old_head_commit, current_head_commit, path.join(testRunnerDir, "conf"))
+        diff = self.get_diff_between_commits(old_head_commit, current_head_commit, path.join(self.testRunnerDir, self.confDir))
         if not diff:
             return False, None
         return True, diff
@@ -368,16 +427,15 @@ class TestCaseCollector:
             return
         self.store_test_cases_in_diffs(diffs)
 
-    def get_test_cases_document(self, test_case, conf):
-        t = TestCaseDocument()
-        t.className = test_case['className']
-        t.testName = test_case['testName']
-        conf = {'conf': conf, 'commented': test_case['commented'], "testLine": test_case['testLine']}
-        t.confFile = [conf]
-        return t
+    def get_test_cases_document(self, test_case, conf_file_name):
+        tcDoc = TestCaseDocument()
+        tcDoc.className = test_case['className']
+        tcDoc.testName = test_case['testName']
+        tcDoc.confFile = [{'conf': conf_file_name, 'commented': test_case['commented'], "testLine": test_case['testLine']}]
+        return tcDoc
 
     def get_history(self, new_commit, commit_type):
-        history = {}
+        history = dict()
         history['author'] = new_commit.committer.name
         history['commitDate'] = new_commit.committed_datetime.__str__()
         history['commitTime'] = new_commit.committed_date
@@ -387,42 +445,45 @@ class TestCaseCollector:
 
     def update_deleted_test_case(self, test_case, new_commit, conf):
         class_name, _test_case = self.get_test_case_from_line(test_case, "")
-        t = self.get_test_cases_document(_test_case, conf)
-        t.deleted = True
+        tc_doc = self.get_test_cases_document(_test_case, conf)
+        tc_doc.deleted = True
         history = self.get_history(new_commit, "delete")
-        t.change_history = [history]
+        tc_doc.change_history = [history]
         self.remove_unwanted_fields(_test_case)
         document_key = hashlib.md5(json.dumps(_test_case, sort_keys=True)).hexdigest()
-        client = CLIENT[BUCKET]
+        client = self.client[self.bucketName]
         try:
             existing_document = client.get(document_key).value
-            to_upsert = t.__dict__
+            to_upsert = tc_doc.__dict__
             new_conf = pydash.clone_deep(to_upsert['confFile'])
             pydash.merge_with(to_upsert, existing_document, TestCaseCollector._merge_dict)
             TestCaseCollector._flatten_conf(to_upsert['confFile'], new_conf)
             client.upsert(document_key, to_upsert)
         except Exception as e:
-            print e
+            print("Update deleted test case: {0}".format(e))
 
     def remove_unwanted_fields(self, test_case):
         pydash.unset(test_case, "testLine")
         pydash.unset(test_case, "commented")
         pydash.unset(test_case, "GROUP")
 
-    def update_new_test_case(self, test_case, new_commit, conf):
+    def update_new_test_case(self, test_case, new_commit, conf_file_name):
         class_name, _test_case = self.get_test_case_from_line(test_case, "")
-        t = self.get_test_cases_document(_test_case, conf)
+        tc_doc = self.get_test_cases_document(_test_case, conf_file_name)
         history = self.get_history(new_commit, "create")
-        t.change_history = [history]
+        tc_doc.change_history = [history]
         self.remove_unwanted_fields(_test_case)
         document_key = hashlib.md5(json.dumps(_test_case, sort_keys=True)).hexdigest()
-        client = CLIENT[BUCKET]
+
         existing_document = None
+        client = self.client[self.bucketName]
+
         try:
             existing_document = client.get(document_key).value
-        except:
-            pass
-        to_upsert = t.__dict__
+        except Exception as e:
+            print("Update new test case: {0}".format(e))
+
+        to_upsert = tc_doc.__dict__
         if existing_document:
             new_conf = pydash.clone_deep(to_upsert['confFile'])
             pydash.merge_with(to_upsert, existing_document, TestCaseCollector._merge_dict)
@@ -441,7 +502,7 @@ class TestCaseCollector:
         history = self.get_history(new_commit, "change")
         old_document_key = hashlib.md5(json.dumps(_old_test_case, sort_keys=True)).hexdigest()
         new_document_key = hashlib.md5(json.dumps(_new_test_case, sort_keys=True)).hexdigest()
-        client = CLIENT[BUCKET]
+        client = self.client[self.bucketName]
         try:
             old_document = client.get(old_document_key).value
         except:
@@ -478,7 +539,6 @@ class TestCaseCollector:
             client.upsert(old_document_key, old_to_upsert)
             client.upsert(new_document_key, new_to_upsert)
 
-
     @staticmethod
     def get_diffs(diff_blob):
         lines_added = []
@@ -502,7 +562,7 @@ class TestCaseCollector:
                     new_line = new_lines.pop()
                     change_percentage = SequenceMatcher(None, old_line, new_line).ratio()
                     if change_percentage > 0.5:
-                        modified = {}
+                        modified = dict()
                         modified['old_test_line'] = old_line
                         modified['new_test_line'] = new_line
                         lines_modified.append(modified)
@@ -553,7 +613,7 @@ class TestCaseCollector:
                     old_line = old_lines.pop(0)
                     changed_percentage = SequenceMatcher(None, old_line, new_line).ratio()
                     if changed_percentage > 0.5:
-                        modified = {}
+                        modified = dict()
                         modified['old_line'] = old_line
                         modified['new_line'] = new_line
                         lines_modified.append(modified)
@@ -584,9 +644,11 @@ class TestCaseCollector:
 
 
 if __name__ == "__main__":
+    user_config_file_path = "config.cfg"
     config = ConfigParser.ConfigParser()
-    config.read("config.cfg")
+    config.read(user_config_file_path)
 
     test_case_collector = TestCaseCollector(config)
-    test_case_collector.create_client()
-    test_case_collector.store_tests()
+    client_creation_successful = test_case_collector.create_client()
+    if client_creation_successful:
+        test_case_collector.store_tests()
