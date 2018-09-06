@@ -73,16 +73,16 @@ class TestCaseCollector:
         try:
             cb_cluster = Cluster("couchbase://{0}". format(self.cbServerHost))
             cb_cluster.authenticate(PasswordAuthenticator(self.cbUsername, self.cbPassword))
-        except Exception as exception:
-            print("Error while connecting to couchbase cluster couchbase://{0}".format(self.cbServerHost))
+        except Exception as cb_cluster_err:
+            print("Error while connecting to cluster couchbase://{0} {1}".format(self.cbServerHost, cb_cluster_err))
             client_creation_success = False
             return client_creation_success
 
         try:
             client = cb_cluster.open_bucket(self.bucketName, lockmode=LOCKMODE_WAIT)
             self.client[self.bucketName] = client
-        except Exception as exception:
-            print("Error while creating bucket client for {0}".format(self.bucketName))
+        except Exception as cb_bucket_err:
+            print("Error while creating client for {0} {1}".format(self.bucketName, cb_bucket_err))
             client_creation_success = False
         return client_creation_success
 
@@ -416,7 +416,8 @@ class TestCaseCollector:
         if old_head_commit == current_head_commit:
             # No update to repository.
             return False, None
-        diff = self.get_diff_between_commits(old_head_commit, current_head_commit, path.join(self.testRunnerDir, self.confDir))
+        diff = self.get_diff_between_commits(old_head_commit, current_head_commit,
+                                             path.join(self.testRunnerDir, self.confDir))
         if not diff:
             return False, None
         return True, diff
@@ -428,11 +429,12 @@ class TestCaseCollector:
         self.store_test_cases_in_diffs(diffs)
 
     def get_test_cases_document(self, test_case, conf_file_name):
-        tcDoc = TestCaseDocument()
-        tcDoc.className = test_case['className']
-        tcDoc.testName = test_case['testName']
-        tcDoc.confFile = [{'conf': conf_file_name, 'commented': test_case['commented'], "testLine": test_case['testLine']}]
-        return tcDoc
+        tc_doc = TestCaseDocument()
+        tc_doc.className = test_case['className']
+        tc_doc.testName = test_case['testName']
+        tc_doc.confFile = [{'conf': conf_file_name, 'commented': test_case['commented'],
+                            'testLine': test_case['testLine']}]
+        return tc_doc
 
     def get_history(self, new_commit, commit_type):
         history = dict()
@@ -505,7 +507,7 @@ class TestCaseCollector:
         client = self.client[self.bucketName]
         try:
             old_document = client.get(old_document_key).value
-        except:
+        except Exception:
             old_document = None
         if old_document_key == new_document_key:
             new_t.change_history = [history]
@@ -529,7 +531,7 @@ class TestCaseCollector:
                 TestCaseCollector._flatten_conf(old_to_upsert['confFile'], new_conf)
             try:
                 new_document = client.get(new_document_key).value
-            except:
+            except Exception:
                 new_document = None
             if new_document:
                 new_to_upsert = pydash.merge_with(new_to_upsert, new_document, TestCaseCollector._merge_dict)
