@@ -50,24 +50,23 @@ def create_clients(cb_cluster_ip, cb_username, cb_password):
         return client_creation_success
 
     # Initialize the list of buckets to which client will be created
-    buckets_to_create_client = ["builds", "QE-Test-Suites"]
+    buckets_to_create_client = [qeTestSuitesBucketName]
     for tem_view in VIEWS:
-        if tem_view["bucket"] != "build":
-            buckets_to_create_client.append(tem_view["bucket"])
+        buckets_to_create_client.append(tem_view["bucket"])
 
     for bucket in buckets_to_create_client:
         try:
             client = cb_cluster.open_bucket(bucket, lockmode=LOCKMODE_WAIT)
             CLIENTS[bucket] = client
-        except Exception as e:
-            print("Error while opening bucket {0}".format(bucket))
+        except Exception as cb_bucket_error:
+            print("Failed to open bucket {0} {1}".format(bucket, cb_bucket_error))
             client_creation_success = False
             break
     return client_creation_success
 
 
 def get_build_document(build, bucket_name):
-    client = CLIENTS['builds']
+    client = CLIENTS[buildBucketName]
     try:
         doc = client.get(build)
         return doc.value
@@ -166,13 +165,13 @@ def store_build_details(build_document, bucket_name):
         existing_build['olderBuild'] = True
 
     get_total_fail_count(doc)
-    client = CLIENTS['builds']
+    client = CLIENTS[buildBucketName]
     client.upsert(build, doc)
 
 
 def purge_job_details(doc_id, bucket_name, disabled=False):
     client = CLIENTS[bucket_name]
-    build_client = CLIENTS['builds']
+    build_client = CLIENTS[buildBucketName]
     try:
         job = client.get(doc_id).value
         if 'build' not in job:
@@ -208,7 +207,7 @@ def purge_job_details(doc_id, bucket_name, disabled=False):
 
 
 def store_existing_jobs():
-    client = CLIENTS['builds']
+    client = CLIENTS[buildBucketName]
     try:
         stored_builds = client.get("existing_builds")
         if stored_builds != ALLJOBS:
@@ -245,7 +244,7 @@ def get_total_fail_count(document):
 
 
 def sanitize():
-    client = CLIENTS['builds']
+    client = CLIENTS[buildBucketName]
     query = "select meta().id from `builds` where `build` is not null"
     for row in client.n1ql_query(N1QLQuery(query)):
         build_id = row['id']
@@ -268,20 +267,21 @@ def store_test_cases(job_details):
     """
     global test_case_collector
     # Return if the job was aborted, since no test results can be obtained from aborted runs.
-    if job_details['result'] in ["ABORTED", "FAILURE"]:
+    if job_details['result'] in ["ABORTED"]:
         return
     url = job_details['url'] + job_details['build_id'].__str__() + "/testReport"
     test_results = get_js(url)
-    if test_results is None:
+
+    if (test_results is None) or ("suites" not in test_results):
         return
-    if "suites" not in test_results:
-        return
+
     for suite in test_results['suites']:
         if 'cases' not in suite:
             continue
+
         for case in suite['cases']:
             # if "conf_file" not in case['name']:
-            #     print case['name']
+            #     print(case['name'])
             #     continue
             test_case_collector.store_test_result(case, job_details)
 
@@ -408,7 +408,7 @@ def get_claim_reason(actions):
 
 
 def get_implemented_in(component, sub_component):
-    client = CLIENTS['testSuites']
+    client = CLIENTS[qeTestSuitesBucketName]
     query = "SELECT implementedIn from `QE-Test-Suites` where component = '{0}' and subcomponent = '{1}'". \
             format(component.lower(), sub_component)
     for row in client.n1ql_query(N1QLQuery(query)):
@@ -639,8 +639,8 @@ def store_test(job_doc, view, first_pass=True, last_total_count=-1, claimed_buil
 
             hist_key = doc["name"] + "-" + doc["build"]
             if not first_pass and hist_key in build_hist:
-                # print "REJECTED- doc already in build results: %s" % doc
-                # print build_hist
+                # print("REJECTED- doc already in build results: %s" % doc)
+                # print(build_hist)
 
                 # attempt to delete if this record has been stored in couchbase
                 try:
@@ -684,7 +684,7 @@ def store_test(job_doc, view, first_pass=True, last_total_count=-1, claimed_buil
 def store_build(client, run, name, view):
     job = get_js(run["url"], {"depth": 0})
     if not job:
-        print "No job info for build"
+        print("No job info for build")
         return
     result = job.get("result")
     if not result:
@@ -751,8 +751,7 @@ def store_build(client, run, name, view):
 
 def poll_build(view):
     # using server bucket (for now)
-    client = CLIENTS['server']
-    tem_jobs = []
+    client = CLIENTS[serverBucketName]
 
     for url in view["urls"]:
         j = get_js(url, {"depth": 0})
@@ -801,8 +800,8 @@ def get_os_component(name, view):
             if os_type[:1] == name.upper()[:1]:
                 _os = os_type
 
-    #if _os_type is None:
-    #    print "%s: job name has unrecognized os: %s" % (view["bucket"], name)
+    # if _os_type is None:
+    #     print("%s: job name has unrecognized os: %s" % (view["bucket"], name))
 
     for comp in features:
         tag, _c = comp.split("-")
@@ -812,8 +811,8 @@ def get_os_component(name, view):
             _comp = _c
             break
 
-    #if _comp is None:
-    #    print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
+    # if _comp is None:
+    #     print("%s: job name has unrecognized component: %s" %  (view["bucket"], name))
 
     return _os, _comp
 
@@ -877,7 +876,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 
 def collect_build_info(url):
-    client = CLIENTS['server']
+    client = CLIENTS[serverBucketName]
     res = get_js(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -964,7 +963,7 @@ if __name__ == "__main__":
         try:
             for temView in VIEWS:
                 JOBS = dict()
-                if temView["bucket"] == "build":
+                if temView["bucket"] == buildBucketName:
                     poll_build(temView)
                 else:
                     poll_test(temView)

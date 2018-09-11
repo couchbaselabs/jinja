@@ -58,10 +58,10 @@ class TestCaseCollector:
         # If exists, pull repo for latest changes, else clone repo locally
         if path.exists(self.testRunnerDir):
             self.testRunnerRepo = git.Repo.init(self.testRunnerDir)
-            # origin = self.testRunnerRepo.remotes.origin
-            # origin.pull()
+            origin = self.testRunnerRepo.remotes.origin
+            origin.pull()
         else:
-            shutil.rmtree(self.testRunnerDir)
+            shutil.rmtree(self.testRunnerDir, ignore_errors=True)
             self.testRunnerRepo = git.Repo.clone_from(test_runner_repo_link, self.testRunnerDir,
                                                       branch=test_runner_branch)
 
@@ -229,18 +229,13 @@ class TestCaseCollector:
         test_cases = self.get_test_cases_from_conf(conf_file)
         test_cases_clone = pydash.clone_deep(test_cases)
 
-        def remove_group(x):
-            pydash.unset(x, 'GROUP')
-            pydash.unset(x, 'commented')
-            pydash.unset(x, 'testLine')
-
-        test_cases_dict_without_groups = pydash.for_each(test_cases_clone, remove_group)
+        test_cases_dict_without_groups = pydash.for_each(test_cases_clone, TestCaseCollector.remove_unwanted_fields)
         callback = lambda x: set(x.items()).issubset(set(test_case.items()))
         index = pydash.find_index(test_cases_dict_without_groups, callback)
         if index == -1:
             return None
         name = test_cases[index]
-        self.remove_unwanted_fields(name)
+        TestCaseCollector.remove_unwanted_fields(name)
         return hashlib.md5(json.dumps(name, sort_keys=True)).hexdigest()
 
     def store_test_result(self, test_result, build_details):
@@ -294,7 +289,7 @@ class TestCaseCollector:
     #                 testCase.className = test_case['className']
     #                 conf = {'conf': conf_file, 'commented': test_case['commented'], "testLine": test_case['testLine']}
     #                 testCase.confFile = [conf]
-    #                 self.remove_unwanted_fields(test_case)
+    #                 TestCaseCollector.remove_unwanted_fields(test_case)
     #                 history = dict()
     #                 history['author'] = file_history[-1].committer.name
     #                 history['commit_date'] = file_history[-1].committed_datetime.__str__()
@@ -338,12 +333,11 @@ class TestCaseCollector:
                 """
                 first_diff = parent_commit.diff(first_commit, file_path)[0]
 
-                # File blob content with respect to commit
+                # File blob content with respect to first commit
                 initial_blob = first_diff.b_blob.data_stream.read()
 
                 # Returns test case list from the commit change
                 initial_test_cases = self.get_test_cases_from_blob(initial_blob)
-
                 for test_case in initial_test_cases:
                     self.update_new_test_case(test_case, first_commit, conf_file)
 
@@ -451,7 +445,7 @@ class TestCaseCollector:
         tc_doc.deleted = True
         history = self.get_history(new_commit, "delete")
         tc_doc.change_history = [history]
-        self.remove_unwanted_fields(_test_case)
+        TestCaseCollector.remove_unwanted_fields(_test_case)
         document_key = hashlib.md5(json.dumps(_test_case, sort_keys=True)).hexdigest()
         client = self.client[self.bucketName]
         try:
@@ -464,26 +458,20 @@ class TestCaseCollector:
         except Exception as e:
             print("Update deleted test case: {0}".format(e))
 
-    def remove_unwanted_fields(self, test_case):
-        pydash.unset(test_case, "testLine")
-        pydash.unset(test_case, "commented")
-        pydash.unset(test_case, "GROUP")
-
     def update_new_test_case(self, test_case, new_commit, conf_file_name):
         class_name, _test_case = self.get_test_case_from_line(test_case, "")
         tc_doc = self.get_test_cases_document(_test_case, conf_file_name)
         history = self.get_history(new_commit, "create")
         tc_doc.change_history = [history]
-        self.remove_unwanted_fields(_test_case)
+        TestCaseCollector.remove_unwanted_fields(_test_case)
         document_key = hashlib.md5(json.dumps(_test_case, sort_keys=True)).hexdigest()
 
         existing_document = None
         client = self.client[self.bucketName]
-
         try:
             existing_document = client.get(document_key).value
-        except Exception as e:
-            print("Update new test case: {0}".format(e))
+        except Exception:
+            pass
 
         to_upsert = tc_doc.__dict__
         if existing_document:
@@ -499,16 +487,18 @@ class TestCaseCollector:
         class_name, _new_test_case = self.get_test_case_from_line(new_test_case, "")
         old_t = self.get_test_cases_document(_old_test_case, conf)
         new_t = self.get_test_cases_document(_new_test_case, conf)
-        self.remove_unwanted_fields(_old_test_case)
-        self.remove_unwanted_fields(_new_test_case)
+        TestCaseCollector.remove_unwanted_fields(_old_test_case)
+        TestCaseCollector.remove_unwanted_fields(_new_test_case)
         history = self.get_history(new_commit, "change")
         old_document_key = hashlib.md5(json.dumps(_old_test_case, sort_keys=True)).hexdigest()
         new_document_key = hashlib.md5(json.dumps(_new_test_case, sort_keys=True)).hexdigest()
         client = self.client[self.bucketName]
+
         try:
             old_document = client.get(old_document_key).value
         except Exception:
             old_document = None
+
         if old_document_key == new_document_key:
             new_t.change_history = [history]
             to_upsert = new_t.__dict__
@@ -525,16 +515,20 @@ class TestCaseCollector:
             new_t.oldChangedDocId = old_document_key
             old_to_upsert = old_t.__dict__
             new_to_upsert = new_t.__dict__
+
             if old_document:
                 new_conf = pydash.clone_deep(old_to_upsert['confFile'])
                 old_to_upsert = pydash.merge_with(old_to_upsert, old_document, TestCaseCollector._merge_dict)
                 TestCaseCollector._flatten_conf(old_to_upsert['confFile'], new_conf)
+
             try:
                 new_document = client.get(new_document_key).value
             except Exception:
                 new_document = None
+
             if new_document:
                 new_to_upsert = pydash.merge_with(new_to_upsert, new_document, TestCaseCollector._merge_dict)
+
             new_conf = pydash.clone_deep(new_to_upsert['confFile'])
             new_to_upsert = pydash.merge_with(new_to_upsert, old_document, TestCaseCollector._merge_dict)
             TestCaseCollector._flatten_conf(new_to_upsert['confFile'], new_conf)
@@ -643,6 +637,12 @@ class TestCaseCollector:
         for _new_conf in new_conf:
             pydash.remove(conf, lambda x: x['conf'] == _new_conf['conf'])
         conf.extend(new_conf)
+
+    @staticmethod
+    def remove_unwanted_fields(test_case):
+        pydash.unset(test_case, "testLine")
+        pydash.unset(test_case, "commented")
+        pydash.unset(test_case, "GROUP")
 
 
 if __name__ == "__main__":
