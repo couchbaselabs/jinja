@@ -4,11 +4,15 @@ import requests
 from couchbase.bucket import Bucket
 from couchbase.n1ql import N1QLQuery
 
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
+
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 BUCKETS = ['server', 'mobile', 'sdk']
-HOST = 'couchbase://172.23.99.54'
-VIEW_API = "http://172.23.99.54:8092/"
+HOST = 'couchbase://172.23.109.74'
+VIEW_API = "http://172.23.109.74:8092/"
 JENKINS_URLS = ["http://qa.sc.couchbase.com/",
                 #"http://qa.hq.northscale.net/",
                 "http://ci.sc.couchbase.com/",
@@ -54,6 +58,35 @@ def queryJenkinsJobs():
 
     return _JOBS
 
+def purge_job_details(doc_id, type, olderBuild=False):
+    client = Bucket(HOST + '/' + type)
+    build_client = Bucket(HOST + '/' + 'builds')
+    try:
+        job = client.get(doc_id).value
+        if 'build' not in job:
+            return
+        build = job['build']
+        build_document = build_client.get(build).value
+        os = job['os']
+        name = job['name']
+        build_id = job['build_id']
+        component = job['component']
+        if (build_document['os'][os][component].__len__() == 0 or name not in build_document['os'][os][component]):
+            return
+        to_del_job = [t for t in build_document['os'][os][component][name] if t['build_id'] == build_id]
+        if to_del_job.__len__() == 0:
+            return
+        to_del_job = to_del_job[0]
+        if olderBuild and not to_del_job['olderBuild']:
+            to_del_job['olderBuild'] = True
+            build_document['totalCount'] -= to_del_job['totalCount']
+            build_document['failCount'] -= to_del_job['failCount']
+        elif not olderBuild:
+            to_del_job['deleted'] = True
+        build_client.upsert(build, build_document)
+    except Exception:
+        pass
+
 
 def purge(bucket, known_jobs):
     client = Bucket(HOST + '/' + bucket)
@@ -94,6 +127,7 @@ def purge(bucket, known_jobs):
                     continue
                 if r.status_code == 404:
                     try:
+                        purge_job_details(_id, bucket)
                         client.remove(_id)
                         print "****MISSING*** %s_%s: %s:%s:%s (%s,%s)" % (build, _id, os, comp, name, count, bid)
                     except:
@@ -110,6 +144,7 @@ def purge(bucket, known_jobs):
                         if oldBid > bid:
                             # purge this docId because it is less this saved bid
                             try:
+                                purge_job_details(_id, bucket, olderBuild=True)
                                 client.remove(_id)
                                 print "****PURGE-KEEP*** %s_%s: %s:%s:%s (%s,%s < %s)" % (
                                 build, _id, os, comp, name, count, bid, oldBid)
@@ -130,6 +165,7 @@ def purge(bucket, known_jobs):
                             else:
                                 # purge old docId
                                 try:
+                                    purge_job_details(oldDocId, bucket, olderBuild=True)
                                     client.remove(oldDocId)
                                     # use this bid as new tracker
                                     JOBS[os][comp][idx] = (name, bid, _id)
