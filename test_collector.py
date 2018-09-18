@@ -1,7 +1,9 @@
+import datetime
 import hashlib
 import json
 import re
 import shutil
+import time
 import ConfigParser
 
 from difflib import ndiff
@@ -25,7 +27,6 @@ class TestCaseDocument(object):
     def __init__(self, test_name, tc_param_dict):
         self.testName = test_name          # Test case line without parameters. Eg: folder.Class.function_name
         self.testParams = tc_param_dict    # Parameter name as key and value as dictionary value
-        self.confFile = []                 # List of conf files under which this case is run
         self.priority = ""                 # Defines the priority of the case
         self.changeHistory = []            # Stores list of git commit wrt to this case
 
@@ -123,12 +124,13 @@ class TestCaseCollector:
         # If exists, pull repo for latest changes, else clone repo locally
         if path.exists(self.testRunnerDir):
             self.testRunnerRepo = git.Repo.init(self.testRunnerDir)
-            # origin = self.testRunnerRepo.remotes.origin
-            # origin.pull()
         else:
             shutil.rmtree(self.testRunnerDir, ignore_errors=True)
             self.testRunnerRepo = git.Repo.clone_from(test_runner_repo_link, self.testRunnerDir,
                                                       branch=test_runner_branch)
+
+        origin = self.testRunnerRepo.remotes.origin
+        origin.pull()
 
         # Point the head to current repo's head
         self.currentHead = self.testRunnerRepo.head.commit
@@ -402,7 +404,7 @@ class TestCaseCollector:
     def add_or_remove_test_case(self, test_case, new_commit, conf_file_name, edit_mode):
         client = self.client[self.bucketName]
 
-        history = TestCaseCollector.get_history(new_commit, edit_mode)
+        history = TestCaseCollector.get_history(new_commit, edit_mode, conf_file_name)
         class_name, _test_case = self.get_test_case_from_line(test_case, "")
 
         if _test_case is None:
@@ -424,9 +426,6 @@ class TestCaseCollector:
                 return
             tc_doc = TestCaseDocument(_test_case['testName'], tc_param_dict).__dict__
 
-        if edit_mode == "create":
-            TestCaseDocument.append_conf_file(conf_file_name, tc_doc['confFile'])
-
         # Set the test case status wrt the conf_file based on edit_mode
         if edit_mode == "create":
             if _test_case['commented']:
@@ -444,7 +443,7 @@ class TestCaseCollector:
     def update_existing_test_case(self, test_case, new_commit, conf_file_name):
         client = self.client[self.bucketName]
 
-        history = TestCaseCollector.get_history(new_commit, "change")
+        history = TestCaseCollector.get_history(new_commit, "change", conf_file_name)
         class_name, _old_test_case = self.get_test_case_from_line(test_case['old_test_line'], "")
         class_name, _new_test_case = self.get_test_case_from_line(test_case['new_test_line'], "")
 
@@ -459,8 +458,10 @@ class TestCaseCollector:
         old_document_key = TestCaseDocument.generate_document_key(_old_test_case['testName'], old_tc_param_dict)
         new_document_key = TestCaseDocument.generate_document_key(_new_test_case['testName'], new_tc_param_dict)
 
+        old_doc_exists = False
         try:
             tc_doc = client.get(old_document_key).value
+            old_doc_exists = True
         except Exception:
             tc_doc = TestCaseDocument(_new_test_case['testName'], new_tc_param_dict).__dict__
 
@@ -472,7 +473,14 @@ class TestCaseCollector:
 
         TestCaseDocument.append_change_history(history, tc_doc['changeHistory'])
 
-        # Writes to bucket
+        # Removes old document
+        if old_doc_exists:
+            try:
+                client.remove(old_document_key)
+            except Exception as doc_remove_err:
+                print("Error while removing old doc with key {0}: {1}".format(old_document_key, doc_remove_err))
+
+        # Insert / update doc into bucket
         client.upsert(new_document_key, tc_doc)
 
     def store_test_cases_in_diffs(self, diffs):
@@ -559,59 +567,57 @@ class TestCaseCollector:
                     self.store_test_cases_in_diffs(diffs)
 
     def check_for_changes(self):
-        origin = self.testRunnerRepo.remotes.origin
-        self.testRunnerRepo.heads.master.checkout()
+        # Save old head commit
         old_head_commit = self.testRunnerRepo.head.commit
+
+        # Pull latest changes
+        origin = self.testRunnerRepo.remotes.origin
         origin.pull()
+
+        # Get current head commit after pull
         current_head_commit = self.testRunnerRepo.head.commit
         if old_head_commit == current_head_commit:
-            # No update to repository.
+            # No update in repository
             return False, None
-        diff = TestCaseCollector.get_diff_between_commits(old_head_commit, current_head_commit,
-                                                          path.join(self.testRunnerDir, self.confDir))
-        if not diff:
+
+        # If changes present, get all commit diffs between two commits
+        diffs = TestCaseCollector.get_diff_between_commits(old_head_commit, current_head_commit,
+                                                           path.join(self.testRunnerDir, self.confDir))
+        if not diffs:
+            # No diffs with respect to conf files
             return False, None
-        return True, diff
+        return True, diffs
 
     def update_test_case_repository(self):
         updated, diffs = self.check_for_changes()
-        if not updated:
-            return
-        self.store_test_cases_in_diffs(diffs)
+        if updated:
+            self.store_test_cases_in_diffs(diffs)
 
     @staticmethod
-    def get_history(new_commit, commit_type):
+    def get_history(new_commit, commit_type, conf_file_changed):
         history = dict()
         history['author'] = new_commit.committer.name
         history['commitDate'] = new_commit.committed_datetime.__str__()
         history['commitTime'] = new_commit.committed_date
         history['commitSha'] = new_commit.hexsha
         history['changeType'] = commit_type
+        history['confFile'] = conf_file_changed
         return history
 
     @staticmethod
     def get_diffs(diff_blob):
-        lines_added = []
-        lines_removed = []
-        lines_modified = []
-        old_lines = []
-        new_lines = []
-        removed = False
+        lines_added = list()
+        lines_removed = list()
+        lines_modified = list()
+        old_line = new_line = ""
         for line in diff_blob:
             if line.startswith("-"):
-                old_lines.append(line.replace("-", "", 1).strip())
-                removed = True
-                continue
+                if old_line != "":
+                    lines_removed.append(old_line)
+                old_line = line.replace("-", "", 1).strip()
             elif line.startswith("+"):
-                new_lines.append(line.replace("+", "", 1).strip())
-                if not removed:
-                    continue
-                else:
-                    removed = False
-                    old_line = old_lines.pop()
-                    new_line = new_lines.pop()
-                    # change_percentage = SequenceMatcher(None, old_line, new_line).ratio()
-                    # if change_percentage > 0.5:
+                new_line = line.replace("+", "", 1).strip()
+                if old_line != "":
                     is_test_updated = TestCaseDocument.is_test_line_updated(old_line, new_line)
                     if is_test_updated:
                         modified = dict()
@@ -621,13 +627,22 @@ class TestCaseCollector:
                     else:
                         lines_removed.append(old_line)
                         lines_added.append(new_line)
+                else:
+                    lines_added.append(new_line)
+                old_line = new_line = ""
             elif line.startswith("?"):
-                continue
-            else:
-                removed = False
-                continue
-        lines_removed.extend(old_lines)
-        lines_added.extend(new_lines)
+                if new_line != "" and old_line != "":
+                    is_test_updated = TestCaseDocument.is_test_line_updated(old_line, new_line)
+                    if is_test_updated:
+                        modified = dict()
+                        modified['old_test_line'] = old_line
+                        modified['new_test_line'] = new_line
+                        lines_modified.append(modified)
+                    else:
+                        lines_removed.append(old_line)
+                        lines_added.append(new_line)
+                    old_line = new_line = ""
+
         return lines_removed, lines_added, lines_modified
 
     @staticmethod
@@ -672,3 +687,14 @@ if __name__ == "__main__":
     client_creation_successful = test_case_collector.create_client()
     if client_creation_successful:
         test_case_collector.store_tests()
+
+    prev_day_index = datetime.datetime.now().date().weekday()
+    while True:
+        # If curr day changed, then check for git check-ins
+        curr_day_index = datetime.datetime.now().date().weekday()
+        if curr_day_index != prev_day_index:
+            prev_day_index = curr_day_index
+            test_case_collector.update_test_case_repository()
+
+        # Sleep for 1hr before next git check
+        time.sleep(3600)

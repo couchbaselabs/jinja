@@ -926,6 +926,9 @@ def collect_all_build_info():
 
 
 if __name__ == "__main__":
+    # Save current day index to trigger APIs if day index changes
+    prev_day_index = datetime.datetime.now().date().weekday()
+
     JOBS = dict()
     ALLJOBS = dict()
     CLIENTS = dict()
@@ -938,9 +941,18 @@ if __name__ == "__main__":
     cb_server_user = config.get("CouchbaseServer", "username")
     cb_server_pass = config.get("CouchbaseServer", "password")
 
+    # Creates clients for Jinja Greenboard buckets
     client_creation_successful = create_clients(cb_server_host, cb_server_user, cb_server_pass)
     if not client_creation_successful:
         exit(1)
+
+    # Creates TestCaseCollector object and bucket client for test case repo
+    test_case_collector = TestCaseCollector(config)
+    client_creation_successful = test_case_collector.create_client()
+    if client_creation_successful:
+        test_case_collector.store_tests()
+    else:
+        print(exception)
 
     """
     # run build collect info thread
@@ -950,13 +962,6 @@ if __name__ == "__main__":
     sanitize()
     get_from_bucket_and_store_build("mobile")
     get_from_bucket_and_store_build("server")
-
-    test_case_collector = TestCaseCollector(config)
-    client_creation_successful = test_case_collector.create_client()
-    if client_creation_successful:
-        test_case_collector.store_tests()
-    else:
-        print(exception)
     """
 
     while True:
@@ -970,4 +975,12 @@ if __name__ == "__main__":
             store_existing_jobs()
         except Exception as e:
             print("Exception during job collection: {0}".format(e))
+
+        # If curr day changed, then check for git check-ins
+        curr_day_index = datetime.datetime.now().date().weekday()
+        if curr_day_index != prev_day_index:
+            prev_day_index = curr_day_index
+            test_case_collector.update_test_case_repository()
+
+        # Default sleep of two mins before next iteration
         time.sleep(120)
