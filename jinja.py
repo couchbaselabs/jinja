@@ -8,30 +8,26 @@ import requests
 import hashlib
 import json
 from threading import Thread
-from couchbase.bucket import Bucket
-from couchbase.cluster import Cluster, ClassicAuthenticator, PasswordAuthenticator
+from couchbase.bucket import Bucket, AuthError
+from couchbase.cluster import Cluster, PasswordAuthenticator
+
 from constants import *
 from urlparse import urlparse
 
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
-
 JOBS = {}
-HOST = '127.0.0.1'
-SASL_PASS = None 
-
-if len(sys.argv) >= 2:
+HOST = '172.23.98.63'
+if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
-if len(sys.argv) == 3:
-    SASL_PASS = sys.argv[2]
 
-def getJS(url, params = None, retry = 5, append_api_json=True):
+def getJS(url, params=None, retry=5, append_api_json=True):
     res = None
     try:
         if append_api_json:
-            res = requests.get("%s/%s" % (url, "api/json"), params = params, timeout=15)
+            res = requests.get("%s/%s" % (url, "api/json"), params=params, timeout=15)
         else:
             res = requests.get("%s" % url, params=params, timeout=15)
         data = res.json()
@@ -47,11 +43,11 @@ def getJS(url, params = None, retry = 5, append_api_json=True):
 
     return res
 
-def getAction(actions, key, value = None):
 
+def getAction(actions, key, value=None):
     if actions is None:
         return None
- 
+
     obj = None
     keys = []
     for a in actions:
@@ -62,9 +58,9 @@ def getAction(actions, key, value = None):
         else:
             # check if new api
             if 'keys' in dir(a[0]):
-                keys = a[0].keys() 
+                keys = a[0].keys()
         if "urlName" in keys:
-            if a["urlName"]!= "robot" and a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
+            if a["urlName"] != "robot" and a["urlName"] != "testReport" and a["urlName"] != "tapTestReport":
                 continue
 
         if key in keys:
@@ -78,15 +74,22 @@ def getAction(actions, key, value = None):
 
     return obj
 
-def getBuildAndPriority(params, isMobile = False):
+
+def getBuildAndPriority(params, isMobile=False):
     build = None
     priority = DEFAULT_BUILD
 
     if params:
         if not isMobile:
-            build = getAction(params, "name", "version_number") or getAction(params, "name", "cluster_version") or  getAction(params, "name", "build") or  getAction(params, "name", "COUCHBASE_SERVER_VERSION") or DEFAULT_BUILD
+            build = getAction(params, "name", "version_number") or getAction(params, "name",
+                                                                             "cluster_version") or getAction(params,
+                                                                                                             "name",
+                                                                                                             "build") or getAction(
+                params, "name", "COUCHBASE_SERVER_VERSION") or DEFAULT_BUILD
         else:
-            build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or getAction(params, "name", "SYNC_GATEWAY_VERSION_OR_COMMIT") or getAction(params, "name", "COUCHBASE_MOBILE_VERSION") or getAction(params, "name", "CBL_iOS_Build")
+            build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or getAction(params, "name",
+                                                                                   "SYNC_GATEWAY_VERSION_OR_COMMIT") or getAction(
+                params, "name", "COUCHBASE_MOBILE_VERSION") or getAction(params, "name", "CBL_iOS_Build")
 
         priority = getAction(params, "name", "priority") or P1
         if priority.upper() not in [P0, P1, P2]:
@@ -95,7 +98,7 @@ def getBuildAndPriority(params, isMobile = False):
     if build is None:
         return None, None
 
-    build = build.replace("-rel","").split(",")[0]
+    build = build.replace("-rel", "").split(",")[0]
     try:
         _build = build.split("-")
         if len(_build) == 1:
@@ -105,17 +108,17 @@ def getBuildAndPriority(params, isMobile = False):
         # check partial rel #'s
         rlen = len(rel.split("."))
         while rlen < 3:
-            rel = rel+".0"
-            rlen+=1
+            rel = rel + ".0"
+            rlen += 1
 
         # verify rel, build
-        m=re.match("^\d\.\d\.\d{1,5}", rel)
+        m = re.match("^\d\.\d\.\d{1,5}", rel)
         if m is None:
-            print "unsupported version_number: "+build
+            print "unsupported version_number: " + build
             return None, None
-        m=re.match("^\d{1,10}", bno)
+        m = re.match("^\d{1,10}", bno)
         if m is None:
-            print "unsupported version_number: "+build
+            print "unsupported version_number: " + build
             return None, None
 
         build = "%s-%s" % (rel, bno.zfill(4))
@@ -125,23 +128,25 @@ def getBuildAndPriority(params, isMobile = False):
 
     return build, priority
 
+
 def getClaimReason(actions):
     reason = ""
 
     if not getAction(actions, "claimed"):
-        return reason # job not claimed
+        return reason  # job not claimed
 
     reason = getAction(actions, "reason") or ""
     try:
-        rep_dict={m:"<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
-            format(m,m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
+        rep_dict = {m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
+            format(m, m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
         if rep_dict:
             pattern = re.compile('|'.join(rep_dict.keys()))
-            reason = pattern.sub(lambda x: rep_dict[x.group()],reason)
+            reason = pattern.sub(lambda x: rep_dict[x.group()], reason)
     except Exception as e:
         pass
 
     return reason
+
 
 # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
 def caveat_swap_xdcr(doc):
@@ -150,50 +155,58 @@ def caveat_swap_xdcr(doc):
         comp = "GOXDCR"
     return comp
 
+
 # when build > 4.1.0 and os is WIN skip VIEW, TUNEABLE, 2I, NSERV, VIEW, EP
 def caveat_should_skip_win(doc):
     skip = False
     os = doc["os"]
     comp = doc["component"]
     build = doc["build"]
-    if build >= "4.1.0" and os  == "WIN" and\
-        (comp == "VIEW" or comp=="TUNABLE" or comp =="2I" or\
-         comp == "NSERV" or comp=="VIEW" or comp=="EP"):
+    if build >= "4.1.0" and os == "WIN" and \
+            (comp == "VIEW" or comp == "TUNABLE" or comp == "2I" or \
+             comp == "NSERV" or comp == "VIEW" or comp == "EP"):
         if doc["name"].lower().find("w01") == 0:
             skip = True
     return skip
 
+
 # when build == 4.1.0 version then skip backup_recovery
 def caveat_should_skip_backup_recovery(doc):
-   skip = False
-   if (doc["build"].find("4.1.0") == 0) and\
-      (doc["component"] == "BACKUP_RECOVERY"):
-       skip = True
-   return skip
+    skip = False
+    if (doc["build"].find("4.1.0") == 0) and \
+            (doc["component"] == "BACKUP_RECOVERY"):
+        skip = True
+    return skip
+
 
 def caveat_should_skip(doc):
-   return caveat_should_skip_win(doc) or\
-          caveat_should_skip_backup_recovery(doc)
+    return caveat_should_skip_win(doc) or \
+           caveat_should_skip_backup_recovery(doc)
+
 
 def caveat_should_skip_mobile(doc):
-   # skip mobile component loading for non cen os
-   return (doc["component"].find("MOBILE") > -1) and\
-             (doc["os"].find("CEN") == -1)
+    # skip mobile component loading for non cen os
+    return (doc["component"].find("MOBILE") > -1) and \
+           (doc["os"].find("CEN") == -1)
+
 
 def isExecutor(name):
     return name.find("test_suite_executor") > -1
+
 
 def skipCollect(params):
     skip_collect_u = getAction(params, "name", "SKIP_GREENBOARD_COLLECT")
     skip_collect_l = getAction(params, "name", "skip_greenboard_collect")
     return skip_collect_u or skip_collect_l
 
+
 def isDisabled(job):
     status = job.get("color")
-    return  status and (status == "disabled")
+    return status and (status == "disabled")
+
 
 def purgeDisabled(job, bucket):
-    client = newClient(bucket, SASL_PASS)
+    client = newClient(bucket)
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
     if len(bids) == 0:
@@ -209,14 +222,14 @@ def purgeDisabled(job, bucket):
         try:
             client.remove(oldKey)
         except Exception as ex:
-            pass # delete ok
+            pass  # delete ok
 
-def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuilds = None):
 
+def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     bucket = view["bucket"]
 
     claimedBuilds = claimedBuilds or {}
-    client = newClient(bucket, SASL_PASS)
+    client = newClient(bucket)
 
     doc = jobDoc
     nameOrig = doc["name"]
@@ -225,7 +238,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
     if url.find("sdkbuilds.couchbase") > -1:
         url = url.replace("sdkbuilds.couchbase", "sdkbuilds.sc.couchbase")
 
-    res = getJS(url, {"depth" : 0})
+    res = getJS(url, {"depth": 0})
 
     if res is None:
         return
@@ -246,9 +259,9 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
         if isExecutor(doc["name"]):
             # include more history
-            start = bids[0]-300
+            start = bids[0] - 300
             if start > 0:
-                bids = range(start, bids[0]+1)
+                bids = range(start, bids[0] + 1)
             bids.reverse()
         elif first_pass:
             bids.reverse()  # bottom to top 1st pass
@@ -257,15 +270,15 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
 
             oldName = JOBS.get(doc["name"]) is not None
             if oldName and bid in JOBS[doc["name"]]:
-                continue # job already stored
+                continue  # job already stored
             else:
                 if oldName and first_pass == False:
                     JOBS[doc["name"]].append(bid)
 
             doc["build_id"] = bid
-            res = getJS(url+str(bid), {"depth" : 0})
+            res = getJS(url + str(bid), {"depth": 0})
             if res is None:
-                continue 
+                continue
 
             if "result" not in res:
                 continue
@@ -274,22 +287,22 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             doc["duration"] = res["duration"]
 
             if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                continue # unknown result state
+                continue  # unknown result state
 
             actions = res["actions"]
             params = getAction(actions, "parameters")
             if skipCollect(params):
-                job = getJS(url, {"depth" : 0})
+                job = getJS(url, {"depth": 0})
                 purgeDisabled(job, bucket)
                 return
 
             totalCount = getAction(actions, "totalCount") or 0
-            failCount  = getAction(actions, "failCount") or 0
-            skipCount  = getAction(actions, "skipCount") or 0
+            failCount = getAction(actions, "failCount") or 0
+            skipCount = getAction(actions, "skipCount") or 0
             doc["claim"] = getClaimReason(actions)
             if totalCount == 0:
                 if lastTotalCount == -1:
-                    continue # no tests ever passed for this build
+                    continue  # no tests ever passed for this build
                 else:
                     totalCount = lastTotalCount
                     failCount = totalCount
@@ -299,20 +312,20 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             doc["failCount"] = failCount
             doc["totalCount"] = totalCount - skipCount
             if params is None:
-               # possibly new api
-               if not 'keys' in dir(actions) and len(actions) > 0:
-                   # actions is not a dict and has data
-                   # then use the first object that is a list
-                   for a in actions:
-                      if not 'keys' in dir(a):
-                          params = a
+                # possibly new api
+                if not 'keys' in dir(actions) and len(actions) > 0:
+                    # actions is not a dict and has data
+                    # then use the first object that is a list
+                    for a in actions:
+                        if not 'keys' in dir(a):
+                            params = a
 
             componentParam = getAction(params, "name", "component")
             if componentParam is None:
                 testYml = getAction(params, "name", "test")
                 if testYml and testYml.find(".yml"):
                     testFile = testYml.split(" ")[1]
-                    componentParam = "systest-"+str(os.path.split(testFile)[-1]).replace(".yml","")
+                    componentParam = "systest-" + str(os.path.split(testFile)[-1]).replace(".yml", "")
 
             if componentParam:
                 subComponentParam = getAction(params, "name", "subcomponent")
@@ -324,16 +337,15 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                 if not componentParam or not subComponentParam or not osParam:
                     continue
 
-                pseudoName = str(osParam+"-"+componentParam+"_"+subComponentParam)
+                pseudoName = str(osParam + "-" + componentParam + "_" + subComponentParam)
                 doc["name"] = pseudoName
                 nameOrig = pseudoName
                 _os, _comp = getOsComponent(pseudoName, view)
-                if _os and  _comp:
-                   doc["os"] = _os
-                   doc["component"] = _comp
+                if _os and _comp:
+                    doc["os"] = _os
+                    doc["component"] = _comp
                 if not doc.get("os") or not doc.get("component"):
-                   continue
-
+                    continue
 
             if bucket == "server":
                 doc["build"], doc["priority"] = getBuildAndPriority(params)
@@ -341,6 +353,7 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
             if not doc.get("build"):
+                print url
                 continue
 
             # run special caveats on collector
@@ -351,11 +364,11 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
             if caveat_should_skip_mobile(doc):
                 continue
 
-            histKey = doc["name"]+"-"+doc["build"]
+            histKey = doc["name"] + "-" + doc["build"]
             if not first_pass and histKey in buildHist:
 
-                #print "REJECTED- doc already in build results: %s" % doc
-                #print buildHist
+                # print "REJECTED- doc already in build results: %s" % doc
+                # print buildHist
 
                 # attempt to delete if this record has been stored in couchbase
 
@@ -363,39 +376,38 @@ def storeTest(jobDoc, view, first_pass = True, lastTotalCount = -1, claimedBuild
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                     oldKey = hashlib.md5(oldKey).hexdigest()
                     client.remove(oldKey)
-                    #print "DELETED- %d:%s" % (bid, histKey)
+                    # print "DELETED- %d:%s" % (bid, histKey)
                 except:
                     pass
 
-                continue # already have this build results
-
+                continue  # already have this build results
 
             key = "%s-%s" % (doc["name"], doc["build_id"])
             key = hashlib.md5(key).hexdigest()
 
-            try: # get custom claim if exists
+            try:  # get custom claim if exists
                 oldDoc = client.get(key)
-                customClaim =  oldDoc.value.get('customClaim')
-             #  if customClaim is not None:
-             #      doc["customClaim"] = customClaim
+                customClaim = oldDoc.value.get('customClaim')
+            #  if customClaim is not None:
+            #      doc["customClaim"] = customClaim
             except:
-                pass #ok, this is new doc 
+                pass  # ok, this is new doc
 
             try:
                 client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
             except:
-                print "set failed, couchbase down?: %s"  % (HOST)
+                print "set failed, couchbase down?: %s" % (HOST)
 
-            if doc.get("claimedBuilds"): # rm custom claim
-                  del doc["claimedBuilds"]
+            if doc.get("claimedBuilds"):  # rm custom claim
+                del doc["claimedBuilds"]
 
     if first_pass:
-        storeTest(jobDoc, view, first_pass = False, lastTotalCount = lastTotalCount, claimedBuilds = claimedBuilds)
+        storeTest(jobDoc, view, first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
 
 
 def storeBuild(client, run, name, view):
-    job = getJS(run["url"], {"depth" : 0})
+    job = getJS(run["url"], {"depth": 0})
     if not job:
         print "No job info for build"
         return
@@ -405,8 +417,8 @@ def storeBuild(client, run, name, view):
 
     actions = job["actions"]
     totalCount = getAction(actions, "totalCount") or 0
-    failCount  = getAction(actions, "failCount") or 0
-    skipCount  = getAction(actions, "skipCount") or 0
+    failCount = getAction(actions, "failCount") or 0
+    skipCount = getAction(actions, "skipCount") or 0
 
     if totalCount == 0:
         return
@@ -419,9 +431,9 @@ def storeBuild(client, run, name, view):
     if not version or not build:
         return
 
-    build = version+"-"+build.zfill(4)
+    build = version + "-" + build.zfill(4)
 
-    name=os+"_"+name
+    name = os + "_" + name
     if getAction(params, "name", "UNIT_TEST"):
         name += "_unit"
 
@@ -429,27 +441,26 @@ def storeBuild(client, run, name, view):
     if not os or not comp:
         return
 
-
     duration = int(job["duration"]) or 0
 
     # lookup pass count fail count version
     doc = {
-      "build_id": int(job["id"]),
-      "claim": "",
-      "name": name,
-      "url": run["url"],
-      "component": comp,
-      "failCount": failCount,
-      "totalCount": totalCount,
-      "result": result,
-      "duration": duration,
-      "priority": "P0",
-      "os": os,
-      "build": build
+        "build_id": int(job["id"]),
+        "claim": "",
+        "name": name,
+        "url": run["url"],
+        "component": comp,
+        "failCount": failCount,
+        "totalCount": totalCount,
+        "result": result,
+        "duration": duration,
+        "priority": "P0",
+        "os": os,
+        "build": build
     }
 
     key = "%s-%s" % (doc["name"], doc["build_id"])
-    print key+","+build
+    print key + "," + build
     key = hashlib.md5(key).hexdigest()
 
     try:
@@ -459,31 +470,30 @@ def storeBuild(client, run, name, view):
         else:
             client.upsert(key, doc)
     except Exception as ex:
-        print "set failed, couchbase down?: %s %s"  % (HOST, ex)
+        print "set failed, couchbase down?: %s %s" % (HOST, ex)
+
 
 def pollBuild(view):
+    client = newClient("server", "password")  # using server bucket (for now)
 
-    client = newClient('server', SASL_PASS)
-
-    tJobs = [] 
+    tJobs = []
 
     for url in view["urls"]:
 
-        j = getJS(url, {"depth" : 0})
+        j = getJS(url, {"depth": 0})
         if j is None:
             continue
 
         name = j["name"]
         for job in j["builds"]:
             build_url = job["url"]
-
-            j = getJS(build_url, {"depth" : 0, "tree":"runs[url,number]"})
+            j = getJS(build_url, {"depth": 0, "tree": "runs[url,number]"})
             if j is None:
                 continue
 
             try:
                 t = None
-                if not j:
+                if not j or 'runs' not in j:
                     # single run job
                     t = Thread(target=storeBuild, args=(client, job, name, view))
                 else:
@@ -491,11 +501,18 @@ def pollBuild(view):
                     for doc in j["runs"]:
                         t = Thread(target=storeBuild, args=(client, doc, name, view))
                 t.start()
-	        tJobs.append(t) 
+                tJobs.append(t)
+                if len(tJobs) > 10:
+                    # intermediate join
+                    for t in tJobs:
+                        t.join()
+                    tJobs = []
             except Exception as ex:
                 print ex
                 pass
-    return tJobs
+    for t in tJobs:
+        t.join()
+
 
 def getOsComponent(name, view):
     _os = _comp = None
@@ -520,29 +537,29 @@ def getOsComponent(name, view):
             if os[:1] == name.upper()[:1]:
                 _os = os
 
-    if _os is None:
-        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
+    #    if _os is None:
+    #        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
 
     for comp in FEATURES:
         tag, _c = comp.split("-")
         docname = name.upper()
-        docname = docname.replace("-","_")
+        docname = docname.replace("-", "_")
         if tag in docname:
             _comp = _c
             break
 
-    if _comp is None:
-        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
+    #    if _comp is None:
+    #        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
 
     return _os, _comp
 
-def pollTest(view):
 
-    tJobs = [] 
-    
+def pollTest(view):
+    tJobs = []
+
     for url in view["urls"]:
 
-        j = getJS(url, {"depth" : 0, "tree" :"jobs[name,url,color]"})
+        j = getJS(url, {"depth": 0, "tree": "jobs[name,url,color]"})
         if j is None or j.get('jobs') is None:
             continue
 
@@ -590,7 +607,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
         msg = change['message']
         # to remove the multiple '\n's, now appearing in the comment
         # that mess with greenboard's display of reviewUrl
-        item['msg'] = msg[:msg.index('Change-Id')].replace("\n", " ") +\
+        item['msg'] = msg[:msg.index('Change-Id')].replace("\n", " ") + \
                       msg[msg.index('Change-Id') - 1:]
         old_format_items.append(item)
     old_format['changeSet']['items'] = old_format_items
@@ -598,8 +615,7 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 
 def collectBuildInfo(url):
-
-    client = newClient('server', SASL_PASS)
+    client = newClient('server')
     res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -616,55 +632,53 @@ def collectBuildInfo(url):
             build_no = getAction(params, "name", "BLD_NUM")
             if build_no is None:
                 continue
-            key = version+"-"+build_no.zfill(4)
+            key = version + "-" + build_no.zfill(4)
             try:
-               # check if we have key
-               client.get(key)
-               continue # already collected changeset
+                # check if we have key
+                client.get(key)
+                continue  # already collected changeset
             except:
-               pass
+                pass
             try:
                 if version[:3] == "0.0":
                     continue
                 if float(version[:3]) > 4.6:
-                    changeset_url = CHANGE_LOG_URL+"?ver={0}&from={1}&to={2}".\
-                        format(version, str(int(build_no)-1), build_no)
+                    changeset_url = CHANGE_LOG_URL + "?ver={0}&from={1}&to={2}". \
+                        format(version, str(int(build_no) - 1), build_no)
                     job = getJS(changeset_url, append_api_json=False)
-                    key = version+"-"+build_no[1:].zfill(4)
+                    key = version + "-" + build_no[1:].zfill(4)
                     job = convert_changeset_to_old_format(job, timestamp)
                 client.upsert(key, job)
             except:
-                print "set failed, couchbase down?: %s"  % (HOST)
+                print "set failed, couchbase down?: %s" % (HOST)
+
 
 def collectAllBuildInfo():
     while True:
-       time.sleep(600)
-       try:
-           for url in BUILDER_URLS:
-               collectBuildInfo(url)
-       except Exception as ex:
-           print "exception occurred during build collection: %s" % (ex)
+        time.sleep(600)
+        try:
+            for url in BUILDER_URLS:
+                collectBuildInfo(url)
+        except Exception as ex:
+            print "exception occurred during build collection: %s" % (ex)
 
-def newClient(bucket, password=None):
+
+def newClient(bucket, password="password"):
     client = None
-
     try:
-        if password is not None:
-            # attempt sasl auth
-            client = Bucket(HOST+'/'+bucket, password=password)
-        else:
-            # plain auth
-            client = Bucket(HOST+'/'+bucket)
-    except Exception as ex:
+        client = Bucket(HOST + '/' + bucket)
+
+    except Exception:
 
         # try rbac style auth
         endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
         cluster = Cluster(endpoint)
-        auther = PasswordAuthenticator(bucket, password)
+        auther = PasswordAuthenticator("Administrator", password)
         cluster.authenticate(auther)
         client = cluster.open_bucket(bucket)
 
     return client
+
 
 if __name__ == "__main__":
 
@@ -673,7 +687,6 @@ if __name__ == "__main__":
     tBuild.start()
 
     while True:
-        # keep list of all threads
         try:
             for view in VIEWS:
                 JOBS = {}
@@ -684,3 +697,4 @@ if __name__ == "__main__":
         except Exception as ex:
             print "exception occurred during job collection: %s" % (ex)
         time.sleep(120)
+

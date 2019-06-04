@@ -4,14 +4,18 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 ## --- PLATFORMS --- ##
-SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL"]
-MOBILE_PLATFORMS = ["CBLITE", "CBLITEIOS", "CEN7", "CEN006", "ANDROID","IOS", "JAVA", "WINDOWS", "MONO", "MACOSX"]
+SERVER_PLATFORMS = ["UBUNTU","CENTOS","DEBIAN","WIN","OSX","MAC", "SUSE", "OEL", "DOCKER"]
+MOBILE_PLATFORMS = ["CBLITE", "CBLITEIOS", "CEN7", "CEN006", "ANDROID","IOS", "JAVA", "WINDOWS", "MONO", "MACOSX", "SYNCGATEWAY", "SYNC-GATEWAY"]
 SDK_PLATFORMS= [".NET","JAVA","LIBC","NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "COMPRESSION-COMPRESSION",
+    "IPV6-IPV6",
+    "LOGREDACTION-LOG_REDACTION",
+    "EVENTING-EVENTING",
     "RBAC-RBAC",
     "PLASMA-PLASMA",
     "IMPORT-IMPORT_EXPORT",
@@ -19,7 +23,7 @@ SERVER_FEATURES = [
     "CONVERG-MOBILE_CONVERGENCE",
     "ANALYTIC-ANALYTICS",
     "EPHEM-EPHEMERAL",
-    "AUTO-AUTO_FAILOVER",
+    "AUTOFAILOVER-AUTO_FAILOVER",
     "FAST-FAST_FAILOVER",
     "SYSTEST-SYSTEST",
     "SYSTEM-SYSTEST",
@@ -47,6 +51,7 @@ SERVER_FEATURES = [
     "VIEW-VIEW",
     "QUERY-QUERY",
     "GOXDCR-GOXDCR",
+    "LWW-GOXDCR",
     "FOREST-FORESTDB",
     "XDCR-XDCR",
     "REB-NSERV",
@@ -66,7 +71,8 @@ SERVER_FEATURES = [
     "SMOKE-SANITY",
     "DCP-EP",
     "FAILOVER-NSERV",
-    "UNIT-UNIT"
+    "UNIT-UNIT", "MEMDB-2I",
+    "SANIT-BUILD_SANITY"
 ]
 MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
                    "UPGR-UPGRADE",
@@ -75,7 +81,7 @@ MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
                    "UNIT-UNIT",
                    "CLIENT-CLIENT",
                    "LISTENER-LISTENER",
-                   "NODE-NODE"]
+                   "NODE-NODE", "CONVERG-MOBILE_CONVERGENCE"]
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
     "SITUATIONAL-SITUATIONAL",
@@ -92,18 +98,18 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY",
 #feature-libcouchbase-core-win/
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/","http://sdkbuilds.sc.couchbase.com/job/Fast-failover-Java/","http://sdkbuilds.sc.couchbase.com/job/fastfailover-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/feature-java/job/centos-java-integration-test/", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/"],
+SERVER_VIEW = {"urls" : [ "http://qa.sc.couchbase.com", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/","http://sdkbuilds.sc.couchbase.com/job/Fast-failover-Java/","http://sdkbuilds.sc.couchbase.com/job/fastfailover-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/feature-java", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/", "http://sdkbuilds.sc.couchbase.com/view/IPV6"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
                "bucket": "server"}
 MOBILE_VIEW = {"urls" : ["http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
-               "bucket": "mobile"}
-SDK_VIEW    = {"urls" : [],
-               "platforms": SDK_PLATFORMS,
-               "features": SDK_FEATURES,
-               "bucket": "sdk"}
+	       "bucket": "mobile"}
+#SDK_VIEW    = {"urls" : [],
+#               "platforms": SDK_PLATFORMS,
+#               "features": SDK_FEATURES,
+#               "bucket": "sdk"}
 BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
               "features": BUILD_FEATURES,

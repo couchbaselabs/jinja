@@ -1,14 +1,20 @@
 import os
 import time
 import requests
-from couchbase.bucket import Bucket
 from couchbase.n1ql import N1QLQuery
+from couchbase.bucket import Bucket, AuthError
+from couchbase.cluster import Cluster, PasswordAuthenticator
+
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
-BUCKETS = ['server', 'mobile', 'sdk']
-HOST = 'couchbase://172.23.99.54'
-VIEW_API = "http://172.23.99.54:8092/"
+BUCKETS = ['server', 'mobile']
+#BUCKETS = ['server', 'mobile', 'sdk']
+HOST = 'couchbase://172.23.98.63'
+VIEW_API = "http://172.23.98.63:8092/"
 JENKINS_URLS = ["http://qa.sc.couchbase.com/",
                 #"http://qa.hq.northscale.net/",
                 "http://ci.sc.couchbase.com/",
@@ -21,6 +27,22 @@ JENKINS_URLS = ["http://qa.sc.couchbase.com/",
                 "http://qa.sc.couchbase.com/view/OS%20Certification/",
                 "http://uberjenkins.sc.couchbase.com:8080/"]
 
+
+def newClient(bucket, password="password"):
+    client = None
+    try:
+        client = Bucket(HOST + '/' + bucket)
+
+    except Exception:
+
+        # try rbac style auth
+        endpoint = '{0}:{1}?select_bucket=true'.format(HOST, 8091)
+        cluster = Cluster(endpoint)
+        auther = PasswordAuthenticator("Administrator", password)
+        cluster.authenticate(auther)
+        client = cluster.open_bucket(bucket)
+
+    return client
 
 def getReq(url, timeout=10):
     if url.find("qa.hq.northscale.net") > -1:
@@ -56,7 +78,7 @@ def queryJenkinsJobs():
 
 
 def purge(bucket, known_jobs):
-    client = Bucket(HOST + '/' + bucket)
+    client = newClient(bucket) 
     builds_query = "select distinct `build` from {0} where `build` is not null order by `build`".format(bucket)
     for row in client.n1ql_query(N1QLQuery(builds_query)):
         build = row['build']
@@ -162,3 +184,4 @@ if __name__ == "__main__":
 
         print "Last run " + time.strftime("%c")
         time.sleep(500)
+
