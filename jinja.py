@@ -1,18 +1,17 @@
 import re
 import sys
 import time
-import datetime
-import subprocess
 import os
 import requests
 import hashlib
-import json
+import copy
+
 from threading import Thread
+
 from couchbase.bucket import Bucket, AuthError
 from couchbase.cluster import Cluster, PasswordAuthenticator
 
 from constants import *
-from urlparse import urlparse
 
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
@@ -78,18 +77,18 @@ def getAction(actions, key, value=None):
 def getBuildAndPriority(params, isMobile=False):
     build = None
     priority = DEFAULT_BUILD
-
     if params:
         if not isMobile:
-            build = getAction(params, "name", "version_number") or getAction(params, "name",
-                                                                             "cluster_version") or getAction(params,
-                                                                                                             "name",
-                                                                                                             "build") or getAction(
-                params, "name", "COUCHBASE_SERVER_VERSION") or DEFAULT_BUILD
+            build = getAction(params, "name", "version_number") or \
+                    getAction(params, "name","cluster_version") or \
+                    getAction(params,"name","build") or \
+                    getAction(params, "name", "COUCHBASE_SERVER_VERSION") or \
+                    DEFAULT_BUILD
         else:
-            build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or getAction(params, "name",
-                                                                                   "SYNC_GATEWAY_VERSION_OR_COMMIT") or getAction(
-                params, "name", "COUCHBASE_MOBILE_VERSION") or getAction(params, "name", "CBL_iOS_Build")
+            build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or \
+                    getAction(params, "name","SYNC_GATEWAY_VERSION_OR_COMMIT") or \
+                    getAction(params, "name", "COUCHBASE_MOBILE_VERSION") or \
+                    getAction(params, "name", "CBL_iOS_Build")
 
         priority = getAction(params, "name", "priority") or P1
         if priority.upper() not in [P0, P1, P2]:
@@ -231,8 +230,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
     claimedBuilds = claimedBuilds or {}
     client = newClient(bucket)
 
-    doc = jobDoc
-    nameOrig = doc["name"]
+    doc = copy.deepcopy(jobDoc)
     url = doc["url"]
 
     if url.find("sdkbuilds.couchbase") > -1:
@@ -352,8 +350,25 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             else:
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
+            if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
+                res = getJS(url + str(bid), {"depth": 0})
+                if "description" in res:
+                    params = res['description'].split(",")
+                    try:
+                        operator_version = params[0].split(":")[1]
+                        op_major_version = operator_version.split("-")[0]
+                        cb_version = params[1].split(":")[1]
+                        upgrade_version = params[2].split(":")[1][0:5]
+                        if "-" not in cb_version:
+                            cb_version = CB_RELEASE_BUILDS[cb_version[0:5]]
+
+                        doc["build"] = cb_version
+                        doc["priority"] = 'P0'
+                        doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
+                    except:
+                        pass
+
             if not doc.get("build"):
-                print url
                 continue
 
             # run special caveats on collector
@@ -525,7 +540,6 @@ def getOsComponent(name, view):
             _os = os
 
     if _os is None:
-
         # attempt partial name lookup
         for os in PLATFORMS:
             if os[:3] == name.upper()[:3]:
@@ -541,6 +555,8 @@ def getOsComponent(name, view):
     #        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
 
     for comp in FEATURES:
+        if _os == "K8S" and "SANIT" in comp:
+            continue
         tag, _c = comp.split("-")
         docname = name.upper()
         docname = docname.replace("-", "_")
@@ -558,7 +574,6 @@ def pollTest(view):
     tJobs = []
 
     for url in view["urls"]:
-
         j = getJS(url, {"depth": 0, "tree": "jobs[name,url,color]"})
         if j is None or j.get('jobs') is None:
             continue
@@ -567,7 +582,6 @@ def pollTest(view):
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:
-                # already processed
                 continue
 
             os, comp = getOsComponent(doc["name"], view)
@@ -582,7 +596,6 @@ def pollTest(view):
             doc["url"] = job["url"]
             doc["color"] = job.get("color")
 
-            name = doc["name"]
             t = Thread(target=storeTest, args=(doc, view))
             t.start()
             tJobs.append(t)
@@ -595,7 +608,6 @@ def pollTest(view):
 
         for t in tJobs:
             t.join()
-
 
 def convert_changeset_to_old_format(new_doc, timestamp):
     old_format = {}
@@ -667,9 +679,7 @@ def newClient(bucket, password="password"):
     client = None
     try:
         client = Bucket(HOST + '/' + bucket)
-
     except Exception:
-
         # try rbac style auth
         endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
         cluster = Cluster(endpoint)
