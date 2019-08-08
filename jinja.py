@@ -18,6 +18,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
 HOST = '172.23.98.63'
+
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
@@ -265,7 +266,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             bids.reverse()  # bottom to top 1st pass
 
         for bid in bids:
-
+            doc = copy.deepcopy(jobDoc)
             oldName = JOBS.get(doc["name"]) is not None
             if oldName and bid in JOBS[doc["name"]]:
                 continue  # job already stored
@@ -357,10 +358,22 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     try:
                         operator_version = params[0].split(":")[1]
                         op_major_version = operator_version.split("-")[0]
+
                         cb_version = params[1].split(":")[1]
-                        upgrade_version = params[2].split(":")[1][0:5]
+
                         if "-" not in cb_version:
                             cb_version = CB_RELEASE_BUILDS[cb_version[0:5]]
+                        elif "enterprise" in cb_version:
+                            cb_version = cb_version.split("-")[1][0:5] + "-" + CB_RELEASE_BUILDS[cb_version.split("-")[1][0:5]]
+
+                        upgrade_version = params[2].split(":")[1]
+
+                        if "-" not in upgrade_version:
+                            upgrade_version = upgrade_version[0:5]
+                        elif "enterprise" in upgrade_version:
+                            upgrade_version = upgrade_version.split("-")[1][0:5]
+                        else:
+                            upgrade_version = upgrade_version.split("-")[0][0:5]
 
                         doc["build"] = cb_version
                         doc["priority"] = 'P0'

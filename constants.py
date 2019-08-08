@@ -108,7 +108,7 @@ SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qa.sc.couchbase.co
 MOBILE_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
                "platforms": MOBILE_PLATFORMS,
                "features": MOBILE_FEATURES,
-	       "bucket": "mobile"}
+	            "bucket": "mobile"}
 #SDK_VIEW    = {"urls" : [],
 #               "platforms": SDK_PLATFORMS,
 #               "features": SDK_FEATURES,
@@ -119,6 +119,8 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "bucket": "build"}
 
 VIEWS = [MOBILE_VIEW, SERVER_VIEW, BUILD_VIEW]
+
+
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
                 "http://server.jenkins.couchbase.com/job/watson-build/"]
 
@@ -141,5 +143,5 @@ CB_RELEASE_BUILDS = {"0.0.0":"0000",
                      "4.6.5":"4742", "5.0.0":"3519", "5.0.1":"5003", "5.0.2":"5509",
                      "5.1.0":"5552", "5.1.1":"5723", "5.1.2":"6030", "5.1.3":"6212",
                      "5.5.0":"2958", "5.5.1":"3511", "5.5.2":"3733", "5.5.3":"4041",
-                     "5.5.4":"4338", "5.5.5":"0000", "6.0.0":"1693", "6.0.1":"2037",
-                     "6.0.2":"0000", "6.0.3":"0000", "6.5.0":"0000"}
+                     "5.5.4":"4338", "5.5.5":"4521", "6.0.0":"1693", "6.0.1":"2037",
+                     "6.0.2":"2413", "6.0.3":"0000", "6.5.0":"0000"}
