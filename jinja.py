@@ -17,13 +17,13 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
-HOST = '172.23.98.63'
+HOST = '127.0.0.1'
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
 
-def getJS(url, params=None, retry=5, append_api_json=True):
+def getJS(url, params=None, retry=10, append_api_json=True):
     res = None
     try:
         if append_api_json:
@@ -422,6 +422,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 pass  # ok, this is new doc
 
             try:
+                print(key)
                 client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
             except:
@@ -558,7 +559,7 @@ def getOsComponent(name, view):
             if os[:3] == name.upper()[:3]:
                 _os = os
 
-    if _os is None and view["bucket"] != "mobile":
+    if (_os is None and view["bucket"] != "sync_gateway" and view["bucket"] != "cblite"):
         # attempt initial name lookup
         for os in PLATFORMS:
             if os[:1] == name.upper()[:1]:
@@ -592,9 +593,21 @@ def pollTest(view):
             continue
 
         for job in j["jobs"]:
+            print(job["name"])
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:
+                continue
+
+            filters_met = False
+            if "filters" in view:
+                for filter_item in view["filters"]:
+                    if filter_item.upper() in job["name"].upper():
+                        filters_met = True
+            else:
+                filters_met = True
+
+            if not filters_met:
                 continue
 
             os, comp = getOsComponent(doc["name"], view)
@@ -689,7 +702,6 @@ def collectAllBuildInfo():
 
 
 def newClient(bucket, password="password"):
-    client = None
     try:
         client = Bucket(HOST + '/' + bucket)
     except Exception:
