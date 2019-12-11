@@ -45,6 +45,22 @@ def getJS(url, params=None, retry=5, append_api_json=True):
 
     return res
 
+def getURL(url, params=None, retry=5):
+    res = None
+    try:
+        res = requests.get("%s" % url, params=params, timeout=15)
+        return res.content
+    except:
+        print "[Error] url unreachable: %s" % url
+        res = None
+        if retry:
+            retry = retry - 1
+            return getURL(url, params, retry)
+        else:
+            pass
+
+    return res
+
 
 def getAction(actions, key, value=None):
     if actions is None:
@@ -435,12 +451,17 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
     if first_pass:
         storeTest(jobDoc, view, first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
 
+def searchString(url,pattern):
+    consoleText = str(getURL(url))
+    m = re.findall(pattern,consoleText,re.M)
+    return m
+
 def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
     bucket = view['bucket']
     claimedBuilds = claimedBuilds or {}
 
-
+    #print("Storing test data from "+url)
     doc={}
     doc["url"]=url
 
@@ -452,15 +473,18 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     doc["build_id"] = bid
     res = getJS(url, {"depth": 0})
     if res is None:
+        print("Warning: build response is none!")
         return
 
     if "result" not in res:
+        print("Warning: result is not in build response!")
         return
 
     doc["result"] = res["result"]
     doc["duration"] = res["duration"]
 
     if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+        print("Warning: result is not in SUCCESS,UNSTABLE,FAILURE,ABOORTED!")
         return  # unknown result state
 
     actions = res["actions"]
@@ -476,7 +500,16 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     doc["claim"] = getClaimReason(actions)
     if totalCount == 0:
         if lastTotalCount == -1:
-            return  # no tests ever passed for this build
+            print("Warning: no tests executed for this build!")
+            totalCount = lastTotalCount
+            failCount = totalCount
+            errors = searchString(url+"/consoleText",r'ERROR - .+$')
+            #print(errors)
+            doc["failedErrors"] = errors
+            isFailedInstall = [(e in 'INSTALL FAILED ON' for e in errors)]
+            if bool(isFailedInstall):
+                doc["failedInstall"] = True
+            #return  # no tests ever passed for this build
         else:
             totalCount = lastTotalCount
             failCount = totalCount
@@ -485,6 +518,15 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
 
     doc["failCount"] = failCount
     doc["totalCount"] = totalCount - skipCount
+    passCount = totalCount - failCount
+
+    if failCount >0:
+        failedTests = searchString(url + "/consoleText",
+                                   r'summary so far suite eventing.eventing_rebalance.EventingRebalance , pass '
+                                   +str(passCount)+' , fail '+str(failCount)+'\n+failures so far...\s+(\S+)')
+        # print(errors)
+        doc["failedTests"] = failedTests
+
     if params is None:
         # possibly new api
         if not 'keys' in dir(actions) and len(actions) > 0:
@@ -557,6 +599,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
                 pass
 
     if not doc.get("build"):
+        print("Warning: doc is missing build!")
         return
 
     # run special caveats on collector
@@ -586,6 +629,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         #buildHist[histKey] = doc["build_id"]
     except Exception as e:
         print "CB client failed, couchbase down or key exists?: %s %s" % (HOST,e)
+
 
 
 
