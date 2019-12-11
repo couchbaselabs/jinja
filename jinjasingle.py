@@ -6,6 +6,7 @@ import requests
 import hashlib
 import copy
 import json
+import datetime
 
 from threading import Thread
 
@@ -530,11 +531,14 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
                                    r' , pass '
                                    +str(passCount)+' , fail '+str(failCount)+'\n+failures so far...'+nextLines)
 
-        if ofailedTests:
+        if failCount==1:
+            failedTests = ofailedTests
+        else:
             failedTests = list(ofailedTests[0])
         #print(failedTests)
         #print("failed tests count="+str(len(failedTests)))
         doc["failedTests"] = failedTests
+
 
     if params is None:
         # possibly new api
@@ -652,6 +656,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             print(e)
             pass
 
+        doc["lastUpdated"] = str(datetime.datetime.utcnow())
         print(key, doc)
         if save != 'no':
             print ("...saving to CB at %s/%s" % (HOST, bucket))
