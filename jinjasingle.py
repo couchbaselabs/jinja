@@ -520,11 +520,20 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     doc["totalCount"] = totalCount - skipCount
     passCount = totalCount - failCount
 
+    # Get the failed test names from the consoleText - matching that many failed lines.
     if failCount >0:
-        failedTests = searchString(url + "/consoleText",
-                                   r'summary so far suite eventing.eventing_rebalance.EventingRebalance , pass '
-                                   +str(passCount)+' , fail '+str(failCount)+'\n+failures so far...\s+(\S+)')
-        # print(errors)
+        nextLines = ''
+        for i in range(failCount):
+            nextLines += "\s+(\S+)"
+
+        ofailedTests = searchString(url + "/consoleText",
+                                   r' , pass '
+                                   +str(passCount)+' , fail '+str(failCount)+'\n+failures so far...'+nextLines)
+
+        if ofailedTests:
+            failedTests = list(ofailedTests[0])
+        #print(failedTests)
+        #print("failed tests count="+str(len(failedTests)))
         doc["failedTests"] = failedTests
 
     if params is None:
@@ -615,13 +624,37 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     key = "%s-%s" % (doc["name"], doc["build_id"])
     key = hashlib.md5(key).hexdigest()
 
+    # new name to have count
+    doc["name"] = doc["name"] + ".1"
+
     if extra_fields!= '':
         doc.update(json.loads(extra_fields))
     try:
+        #check if doc exists
+        client = newClient(bucket)
+        try:
+            existingKeyVal = client.get(key)
+            #print("existing:"+ str(existingKeyVal))
+            print("Warning: document key exists")
+            oldName = existingKeyVal.value['name']
+            newName = oldName
+            newCount = 1
+            #print("oldName="+oldName)
+            if '.' in oldName:
+                nameParts = oldName.split(".")
+                newName = nameParts[0]
+                oldCount = int(nameParts[1])
+                newCount = oldCount + 1
+
+            doc["name"] = newName + "." + str(newCount)
+
+        except Exception as e:
+            print(e)
+            pass
+
         print(key, doc)
         if save != 'no':
             print ("...saving to CB at %s/%s" % (HOST, bucket))
-            client = newClient(bucket)
             if save == 'update':
                 client.upsert(key, doc)
             else:
