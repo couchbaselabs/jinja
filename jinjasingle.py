@@ -499,6 +499,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     failCount = getAction(actions, "failCount") or 0
     skipCount = getAction(actions, "skipCount") or 0
     doc["claim"] = getClaimReason(actions)
+    isAnyfailedInstall = False
     if totalCount == 0:
         if lastTotalCount == -1:
             print("Warning: no tests executed for this build!")
@@ -510,6 +511,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             isFailedInstall = [(e in 'INSTALL FAILED ON' for e in errors)]
             if bool(isFailedInstall):
                 doc["failedInstall"] = True
+                isAnyfailedInstall = True
             #return  # no tests ever passed for this build
         else:
             totalCount = lastTotalCount
@@ -522,8 +524,10 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     passCount = totalCount - failCount
 
     # Get the failed test names from the consoleText - matching that many failed lines.
+    isAnyFailedTest = False
     if failCount >0:
         nextLines = ''
+        isAnyFailedTest = True
         for i in range(failCount):
             nextLines += "\s+(\S+)"
 
@@ -544,7 +548,6 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         if testReport:
             #doc["failedErrors"] = testReport['suites'][0]['cases']
             listAllCases = []
-            index=0
             for tcase in testReport['suites'][0]['cases']:
                 tname = tcase['name']
                 tclassName = tcase['className']
@@ -555,7 +558,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
                     listCase["className"] = tclassName
                     listCase["errorStackTrace"] = terrorStackTrace
                     listAllCases.append(listCase)
-                    index=index+1
+
                 #print("tname="+tname+",tclassName="+tclassName+",terrorStackTrace="+terrorStackTrace)
             doc["failedErrors"] = listAllCases
 
@@ -644,7 +647,14 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
 
     histKey = doc["name"] + "-" + doc["build"]
 
-    key = "%s-%s" % (doc["name"], doc["build_id"])
+    if isAnyfailedInstall:
+        key = "%s-failedInstall-%s" % (doc["name"], doc["build_id"])
+    elif isAnyFailedTest:
+        key = "%s-failedTests-%s" % (doc["name"], doc["build_id"])
+    else:
+        key = "%s-%s" % (doc["name"], doc["build_id"])
+
+    print("key="+key)
     key = hashlib.md5(key).hexdigest()
 
     # new name to have count
