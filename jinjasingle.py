@@ -457,6 +457,51 @@ def searchString(url,pattern):
     m = re.findall(pattern,consoleText,re.M)
     return m
 
+def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey):
+    print("Re-trigger the failedInstall jenkins job through test_suite_dispatcher...")
+    # non default regression poolId or not None addPoolId
+    nondefaultcomponents = [
+        {"name": "fts", "poolId": "regression", "addPoolId": "elastic-fts"},
+        {"name": "ipv6", "poolId": "ipv6", "addPoolId": "None"},
+        {"name": "xdcr", "poolId": "regression", "addPoolId": "elastic-xdcr"},
+        {"name": "epeng", "poolId": "regression", "addPoolId": "elastic-xdcr"},
+    ]
+    poolId = "regression"
+    try:
+        poolId = next(item for item in nondefaultcomponents if item["name"] == doc["component"])["poolId"]
+    except:
+        pass
+    if not poolId:
+        poolId = "regression"
+
+    addPoolId = "None"
+    try:
+        addPoolId = next(item for item in nondefaultcomponents if item["name"] == doc["component"])["addPoolId"]
+    except:
+        pass
+    if not addPoolId:
+        addPoolId = "None"
+
+    urlToRun = "http://qa.sc.couchbase.com/job/test_suite_dispatcher/buildWithParameters?" \
+               "token={0}&OS={1}&version_number={2}&suite={3}&component={4}&subcomponent={5}&serverPoolId={6}&branch={7}&addPoolId={8}". \
+        format("extended_sanity", doc["os"].lower(), doc["build"], "12hr_weekly", doc["component"].lower(),
+               doc["subcomponent"].lower(), poolId,
+               "master", addPoolId)
+    print("Re-dispatching URL: " + str(urlToRun))
+    # response = requests.get(urlToRun, verify=True)
+    # if not response.ok:
+    #    print("Warning: Error in triggering job")
+    #    print(str(response))
+
+    urlToDelete = url + "/doDelete?token=extended_sanity"
+    print("TBD: Deleting failed install jenkins build: " + urlToDelete)
+    # response = requests.get(urlToDelete)
+    # if not response.ok:
+    #    print("Warning: error while deleting the jenkins build!")
+    #    print(str(response))
+    print("TBD: Removing record from CB...key: " + defaultKeyName)
+    # client.remove(defaultKey)
+
 def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
     bucket = view['bucket']
@@ -597,6 +642,8 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             doc["component"] = _comp
         if not doc.get("os") or not doc.get("component"):
             return
+        if subComponentParam:
+            doc["subcomponent"] = subComponentParam
 
     if bucket == "server":
         doc["build"], doc["priority"] = getBuildAndPriority(params)
@@ -654,8 +701,12 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     else:
         key = "%s-%s" % (doc["name"], doc["build_id"])
 
+
     print("key="+key)
     key = hashlib.md5(key).hexdigest()
+
+    defaultKeyName = "%s-%s" % (doc["name"], doc["build_id"])
+    defaultKey = hashlib.md5(defaultKeyName).hexdigest()
 
     # new name to have count
     doc["name"] = doc["name"] + ".1"
@@ -697,8 +748,11 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     except Exception as e:
         print "CB client failed, couchbase down or key exists?: %s %s" % (HOST,e)
 
-
-
+    # Delete and retrigger the jobs
+    if isAnyfailedInstall and delete_retry != 'none':
+        retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey)
+    elif isAnyfailedInstall:
+        print("warning: failedInstall run but not deleting the record and re-triggering the job.")
 
 def storeBuild(client, run, name, view):
     job = getJS(run["url"], {"depth": 0})
@@ -974,6 +1028,7 @@ if __name__ == "__main__":
     save="no"
     extra_fields=""
     view_name="server"
+    delete_retry="none"
     if len(sys.argv) == 2:
         HOST = sys.argv[1]
     elif len(sys.argv) == 3:
@@ -988,15 +1043,22 @@ if __name__ == "__main__":
         urls = sys.argv[2]
         save = sys.argv[3]
         view_name = sys.argv[4]
-    elif len(sys.argv) >= 6:
+    elif len(sys.argv) == 6:
         HOST = sys.argv[1]
         urls = sys.argv[2]
         save = sys.argv[3]
         view_name = sys.argv[4]
-        extra_fields = sys.argv[5]
+        delete_retry = sys.argv[5]
+    elif len(sys.argv) >= 7:
+        HOST = sys.argv[1]
+        urls = sys.argv[2]
+        save = sys.argv[3]
+        view_name = sys.argv[4]
+        delete_retry = sys.argv[5]
+        extra_fields = sys.argv[6]
     else:
-        print "Usage: ",sys.argv[0]," CBhost jenkinsbuildurls [cbsave_flag view_name extra_fields]"
-        print "Example: ",sys.argv[0],"127.0.0.1", "http://qa.sc.couchbase.com/job/test_suite_executor/179035 update|no server|mobile|build \'{\"failedInstall\": false, \"failedReason\": \"\", \"failedInstallVMs\": \"\"}'"
+        print "Usage: ",sys.argv[0]," CBhost jenkinsbuildurls [cbsave_flag view_name delete_retry extra_fields]"
+        print "Example: ",sys.argv[0],"127.0.0.1", "http://qa.sc.couchbase.com/job/test_suite_executor/179035 update|no server|mobile|build none \'{\"failedInstall\": false, \"failedReason\": \"\", \"failedInstallVMs\": \"\"}'"
         sys.exit(1)
 
     #urls = ["http://server.jenkins.couchbase.com/job/watson-toy/213"]
