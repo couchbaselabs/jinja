@@ -538,7 +538,26 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         #print(failedTests)
         #print("failed tests count="+str(len(failedTests)))
         doc["failedTests"] = failedTests
-
+        # Get errorstacktraces
+        testReport = getJS(url+"/testReport")
+        #print(testReport)
+        if testReport:
+            #doc["failedErrors"] = testReport['suites'][0]['cases']
+            listAllCases = []
+            index=0
+            for tcase in testReport['suites'][0]['cases']:
+                tname = tcase['name']
+                tclassName = tcase['className']
+                terrorStackTrace = tcase['errorStackTrace']
+                if terrorStackTrace != None:
+                    listCase = {}
+                    listCase["name"] = tname
+                    listCase["className"] = tclassName
+                    listCase["errorStackTrace"] = terrorStackTrace
+                    listAllCases.append(listCase)
+                    index=index+1
+                #print("tname="+tname+",tclassName="+tclassName+",terrorStackTrace="+terrorStackTrace)
+            doc["failedErrors"] = listAllCases
 
     if params is None:
         # possibly new api
@@ -653,7 +672,7 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             doc["name"] = newName + "." + str(newCount)
 
         except Exception as e:
-            print(e)
+            #print(e)
             pass
 
         doc["lastUpdated"] = str(datetime.datetime.utcnow())
