@@ -6,7 +6,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN", "OSX", "MAC", "SUSE",
                     "OEL", "DOCKER", "K8S"]
-SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX"]
+SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
 LITE_PLATFORMS = ["CBLITE", "CBLITEIOS", "ANDROID", "IOS", "JAVA"]
 SDK_PLATFORMS= [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
@@ -81,14 +81,20 @@ SERVER_FEATURES = [
     "SANIT-BUILD_SANITY",
     "CBOP-OPERATOR"
 ]
-MOBILE_FEATURES = ["FUNCT-FUNCTIONAL",
-                   "UPGR-UPGRADE",
-                   "SANITY-SANITY",
-                   "BUILD-BUILD",
-                   "UNIT-UNIT",
-                   "CLIENT-CLIENT",
-                   "LISTENER-LISTENER",
-                   "NODE-NODE", "CONVERG-MOBILE_CONVERGENCE"]
+
+LITE_FEATURES = ["FUNCT-FUNCTIONAL",
+                 "UPGR-UPGRADE",
+                 "SANITY-SANITY",
+                 "BUILD-BUILD",
+                 "UNIT-UNIT",
+                 "CLIENT-CLIENT",
+                 "LISTENER-LISTENER",
+                 "NODE-NODE",
+                 "CONVERG-MOBILE_CONVERGENCE"]
+
+SG_FEATURES = ["FUNCTIONAL-FUNCTIONAL",
+               "UPGRADE-UPGRADE"]
+
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
     "SITUATIONAL-SITUATIONAL",
@@ -109,12 +115,12 @@ SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qa.sc.couchbase.co
 SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
            "platforms": SG_PLATFORMS,
            "filters": SG_FILTERS,
-           "features": MOBILE_FEATURES,
+           "features": SG_FEATURES,
            "bucket": "sync_gateway"}
 
 LITE_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
              "platforms": LITE_PLATFORMS,
-             "features": MOBILE_FEATURES,
+             "features": LITE_FEATURES,
              "bucket": "cblite"}
 
 BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
@@ -122,7 +128,7 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "features": BUILD_FEATURES,
               "bucket": "build"}
 
-VIEWS = [LITE_VIEW]
+VIEWS = [SG_VIEW, LITE_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
