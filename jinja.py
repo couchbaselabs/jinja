@@ -17,13 +17,13 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
-HOST = '127.0.0.1'
+HOST = '172.23.98.63'
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
 
-def getJS(url, params=None, retry=10, append_api_json=True):
+def getJS(url, params=None, retry=5, append_api_json=True):
     res = None
     try:
         if append_api_json:
@@ -422,7 +422,6 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 pass  # ok, this is new doc
 
             try:
-                print(key)
                 client.upsert(key, doc)
                 buildHist[histKey] = doc["build_id"]
             except:
@@ -593,7 +592,6 @@ def pollTest(view):
             continue
 
         for job in j["jobs"]:
-            print(job["name"])
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:
