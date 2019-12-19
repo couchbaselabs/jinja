@@ -558,7 +558,7 @@ def getOsComponent(name, view):
             if os[:3] == name.upper()[:3]:
                 _os = os
 
-    if _os is None and view["bucket"] != "mobile":
+    if (_os is None and view["bucket"] != "sync_gateway" and view["bucket"] != "cblite"):
         # attempt initial name lookup
         for os in PLATFORMS:
             if os[:1] == name.upper()[:1]:
@@ -595,6 +595,17 @@ def pollTest(view):
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:
+                continue
+
+            filters_met = False
+            if "filters" in view:
+                for filter_item in view["filters"]:
+                    if filter_item.upper() in job["name"].upper():
+                        filters_met = True
+            else:
+                filters_met = True
+
+            if not filters_met:
                 continue
 
             os, comp = getOsComponent(doc["name"], view)
@@ -689,7 +700,6 @@ def collectAllBuildInfo():
 
 
 def newClient(bucket, password="password"):
-    client = None
     try:
         client = Bucket(HOST + '/' + bucket)
     except Exception:
