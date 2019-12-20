@@ -17,7 +17,7 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
-HOST = '172.23.98.63'
+HOST = '127.0.0.1'
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -717,6 +717,7 @@ if __name__ == "__main__":
 
     # run build collect info thread
     tBuild = Thread(target=collectAllBuildInfo)
+    tBuild.daemon = True
     tBuild.start()
 
     while True:
