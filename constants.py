@@ -7,8 +7,8 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN", "OSX", "MAC", "SUSE",
                     "OEL", "DOCKER", "K8S"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
-LITE_PLATFORMS = ["CBLITE", "CBLITEIOS", "ANDROID", "IOS", "JAVA"]
-SDK_PLATFORMS= [".NET", "JAVA", "LIBC", "NODE"]
+LITE_PLATFORMS = ["ANDROID", "IOS", "JAVA", "XAMARIN", "DOTNET"]
+SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 SG_FILTERS = ["SYNCGATEWAY", "SYNC-GATEWAY"]
@@ -84,13 +84,8 @@ SERVER_FEATURES = [
 
 LITE_FEATURES = ["FUNCT-FUNCTIONAL",
                  "UPGR-UPGRADE",
-                 "SANITY-SANITY",
-                 "BUILD-BUILD",
-                 "UNIT-UNIT",
-                 "CLIENT-CLIENT",
                  "LISTENER-LISTENER",
-                 "NODE-NODE",
-                 "CONVERG-MOBILE_CONVERGENCE"]
+                 "SYSTEM-SYSTEM"]
 
 SG_FEATURES = ["FUNCTIONAL-FUNCTIONAL",
                "UPGRADE-UPGRADE"]

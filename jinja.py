@@ -717,6 +717,7 @@ if __name__ == "__main__":
 
     # run build collect info thread
     tBuild = Thread(target=collectAllBuildInfo)
+    tBuild.daemon = True
     tBuild.start()
 
     while True:
