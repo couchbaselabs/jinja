@@ -17,7 +17,7 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
-HOST = '172.23.98.63'
+HOST = '127.0.0.1'
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -351,6 +351,10 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             else:
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
+            if bucket == SG_VIEW["bucket"]:
+                doc["server_version"] = getAction(params, "name",
+                                                  "COUCHBASE_SERVER_VERSION")
+
             if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
                 res = getJS(url + str(bid), {"depth": 0})
                 if "description" in res:
@@ -378,6 +382,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                         doc["build"] = cb_version
                         doc["priority"] = 'P0'
                         doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
+
                     except:
                         pass
 
