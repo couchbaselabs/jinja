@@ -17,7 +17,7 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
-HOST = '127.0.0.1'
+HOST = '172.23.98.63'
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -382,7 +382,6 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                         doc["build"] = cb_version
                         doc["priority"] = 'P0'
                         doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
-
                     except:
                         pass
 
