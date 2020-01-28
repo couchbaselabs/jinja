@@ -7,6 +7,7 @@ import hashlib
 import copy
 import json
 import datetime
+from optparse import OptionParser
 
 from threading import Thread
 
@@ -21,6 +22,8 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 JOBS = {}
 #HOST = '172.23.98.63'
 HOST = '127.0.0.1'
+
+MAX_RETRIES_NUM = 3
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -482,25 +485,41 @@ def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey):
     if not addPoolId:
         addPoolId = "None"
 
-    urlToRun = "http://qa.sc.couchbase.com/job/test_suite_dispatcher/buildWithParameters?" \
-               "token={0}&OS={1}&version_number={2}&suite={3}&component={4}&subcomponent={5}&serverPoolId={6}&branch={7}&addPoolId={8}". \
-        format("extended_sanity", doc["os"].lower(), doc["build"], "12hr_weekly", doc["component"].lower(),
-               doc["subcomponent"].lower(), poolId,
-               "master", addPoolId)
-    print("Re-dispatching URL: " + str(urlToRun))
-    # response = requests.get(urlToRun, verify=True)
-    # if not response.ok:
-    #    print("Warning: Error in triggering job")
-    #    print(str(response))
+    retry_get_params = ""
+    dispatcher = ""
+    retries = ""
+    try:
+        retry_doc = json.loads(retry_params)
+        for key, value in retry_doc.iteritems():
+            if key != "retries":
+                retry_get_params = retry_get_params + "&" + key + "=" + value
+        dispatcher = retry_doc["dispatcher"]
+        retries = retry_doc["retries"]
 
-    urlToDelete = url + "/doDelete?token=extended_sanity"
-    print("TBD: Deleting failed install jenkins build: " + urlToDelete)
-    # response = requests.get(urlToDelete)
-    # if not response.ok:
-    #    print("Warning: error while deleting the jenkins build!")
-    #    print(str(response))
-    print("TBD: Removing record from CB...key: " + defaultKeyName)
-    # client.remove(defaultKey)
+        num_retries = int(retries)
+        num_retries = num_retries + 1
+        retry_get_params = retry_get_params + "&retries="+str(num_retries)
+
+        if num_retries <= MAX_RETRIES_NUM and retry_get_params != "":
+            urlToRun = "http://qa.sc.couchbase.com/job/{1}/buildWithParameters?token={0}". \
+            format("extended_sanity", dispatcher)
+            urlToRun = urlToRun + retry_get_params
+            print("Re-dispatching URL: " + str(urlToRun))
+            response = requests.get(urlToRun, verify=True)
+            if not response.ok:
+                print("Warning: Error in triggering job")
+                print(str(response))
+
+            urlToDelete = url + "/doDelete?token=extended_sanity"
+            print("TBD: Deleting failed install jenkins build: " + urlToDelete)
+            response = requests.get(urlToDelete)
+            if not response.ok:
+                print("Warning: error while deleting the jenkins build!")
+                print(str(response))
+            print("TBD: Removing record from CB...key: " + defaultKeyName)
+            # client.remove(defaultKey)
+    except:
+        pass
 
 def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
@@ -695,9 +714,9 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     histKey = doc["name"] + "-" + doc["build"]
 
     if isAnyfailedInstall:
-        key = "%s-failedInstall-%s" % (doc["name"], doc["build_id"])
+        key = "%s-failedInstall-%s" % (doc["name"], doc["build"])
     elif isAnyFailedTest:
-        key = "%s-failedTests-%s" % (doc["name"], doc["build_id"])
+        key = "%s-failedTests-%s" % (doc["name"], doc["build"])
     else:
         key = "%s-%s" % (doc["name"], doc["build_id"])
 
@@ -726,14 +745,14 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             #print("oldName="+oldName)
             if '.' in oldName:
                 nameParts = oldName.split(".")
-                newName = nameParts[0]
-                oldCount = int(nameParts[1])
+                newName = '.'.join(nameParts[0:-1])
+                oldCount = int(nameParts[-1])
                 newCount = oldCount + 1
 
             doc["name"] = newName + "." + str(newCount)
 
         except Exception as e:
-            #print(e)
+            print(e)
             pass
 
         doc["lastUpdated"] = str(datetime.datetime.utcnow())
@@ -1024,39 +1043,29 @@ def newClient(bucket, password="password"):
 
 
 if __name__ == "__main__":
-    urls=""
-    save="no"
-    extra_fields=""
-    view_name="server"
-    delete_retry="none"
-    if len(sys.argv) == 2:
-        HOST = sys.argv[1]
-    elif len(sys.argv) == 3:
-        HOST = sys.argv[1]
-        urls = sys.argv[2]
-    elif len(sys.argv) == 4:
-        HOST = sys.argv[1]
-        urls = sys.argv[2]
-        save = sys.argv[3]
-    elif len(sys.argv) == 5:
-        HOST = sys.argv[1]
-        urls = sys.argv[2]
-        save = sys.argv[3]
-        view_name = sys.argv[4]
-    elif len(sys.argv) == 6:
-        HOST = sys.argv[1]
-        urls = sys.argv[2]
-        save = sys.argv[3]
-        view_name = sys.argv[4]
-        delete_retry = sys.argv[5]
-    elif len(sys.argv) >= 7:
-        HOST = sys.argv[1]
-        urls = sys.argv[2]
-        save = sys.argv[3]
-        view_name = sys.argv[4]
-        delete_retry = sys.argv[5]
-        extra_fields = sys.argv[6]
-    else:
+    usage = ''
+    parser = OptionParser(usage)
+    parser.add_option('-d','--host', dest='HOST')
+    parser.add_option('-u','--urls', dest='urls', default="")
+    parser.add_option('-s','--save', dest='save', default="no")
+    parser.add_option('-v','--view', dest='view_name', default="server")
+    parser.add_option('-r','--delete_retry', dest='delete_retry', default="none")
+    parser.add_option('-e','--extra_fields', dest='extra_fields', default="")
+    parser.add_option('-k','--retry_params', dest='retry_params', default="")
+
+
+
+    options, args = parser.parse_args()
+
+    HOST = options.HOST
+    urls = options.urls
+    save = options.save
+    view_name = options.view_name
+    delete_retry = options.delete_retry
+    extra_fields = options.extra_fields
+    retry_params = options.retry_params
+
+    if HOST is None or urls == "":
         print "Usage: ",sys.argv[0]," CBhost jenkinsbuildurls [cbsave_flag view_name delete_retry extra_fields]"
         print "Example: ",sys.argv[0],"127.0.0.1", "http://qa.sc.couchbase.com/job/test_suite_executor/179035 update|no server|mobile|build none \'{\"failedInstall\": false, \"failedReason\": \"\", \"failedInstallVMs\": \"\"}'"
         sys.exit(1)
@@ -1070,7 +1079,6 @@ if __name__ == "__main__":
         view = BUILD_VIEW
     else:
         view_name="server"
-
     for url in urls.split(','):
         storeTestData(url, view)
 
