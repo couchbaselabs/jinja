@@ -351,6 +351,10 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             else:
                 doc["build"], doc["priority"] = getBuildAndPriority(params, True)
 
+            if bucket == SG_VIEW["bucket"]:
+                doc["server_version"] = getAction(params, "name",
+                                                  "COUCHBASE_SERVER_VERSION")
+
             if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
                 res = getJS(url + str(bid), {"depth": 0})
                 if "description" in res:
