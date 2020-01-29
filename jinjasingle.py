@@ -1071,6 +1071,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     #urls = ["http://server.jenkins.couchbase.com/job/watson-toy/213"]
+    view = SERVER_VIEW
+
     if view_name == 'server':
         view = SERVER_VIEW
     elif view_name == 'mobile':
