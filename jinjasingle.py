@@ -713,22 +713,12 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
 
     histKey = doc["name"] + "-" + doc["build"]
 
-    if isAnyfailedInstall:
-        key = "%s-failedInstall-%s" % (doc["name"], doc["build"])
-    elif isAnyFailedTest:
-        key = "%s-failedTests-%s" % (doc["name"], doc["build"])
-    else:
-        key = "%s-%s" % (doc["name"], doc["build_id"])
-
-
-    print("key="+key)
-    key = hashlib.md5(key).hexdigest()
-
     defaultKeyName = "%s-%s" % (doc["name"], doc["build_id"])
     defaultKey = hashlib.md5(defaultKeyName).hexdigest()
 
     # new name to have count
     doc["name"] = doc["name"] + ".1"
+    key = _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc["name"], doc["build"], doc["build_id"])
 
     if extra_fields!= '':
         doc.update(json.loads(extra_fields))
@@ -750,13 +740,15 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
                 newCount = oldCount + 1
 
             doc["name"] = newName + "." + str(newCount)
-
+            key = _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc["name"], doc["build"], doc["build_id"])
         except Exception as e:
             print(e)
             pass
 
         doc["lastUpdated"] = str(datetime.datetime.utcnow())
         print(key, doc)
+
+        key = hashlib.md5(key).hexdigest()
         if save != 'no':
             print ("...saving to CB at %s/%s" % (HOST, bucket))
             if save == 'update':
@@ -772,6 +764,16 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey)
     elif isAnyfailedInstall:
         print("warning: failedInstall run but not deleting the record and re-triggering the job.")
+
+def _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc_name, build, build_id):
+    # build - cb bulid, build_id - jenkins build
+    if isAnyfailedInstall:
+        return "%s-failedInstall-%s" % (doc_name, build)
+    elif isAnyFailedTest:
+        return "%s-failedTests-%s" % (doc_name, build)
+    else:
+        return "%s-%s" % (doc_name, build_id)
+
 
 def storeBuild(client, run, name, view):
     job = getJS(run["url"], {"depth": 0})
