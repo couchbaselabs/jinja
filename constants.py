@@ -88,7 +88,9 @@ LITE_FEATURES = ["FUNCT-FUNCTIONAL",
                  "SYSTEM-SYSTEM"]
 
 SG_FEATURES = ["FUNCTIONAL-FUNCTIONAL",
-               "UPGRADE-UPGRADE"]
+               "UPGRADE-UPGRADE",
+               "SANITY-SANITY",
+               "SANIT-SANITY"]
 
 SDK_FEATURES = [
     "LONGEVITY-STRESS",
