@@ -11,7 +11,7 @@ from optparse import OptionParser
 
 from threading import Thread
 
-from couchbase.bucket import Bucket, AuthError
+from couchbase.bucket import Bucket, AuthError, N1QLQuery
 from couchbase.cluster import Cluster, PasswordAuthenticator
 
 from constants import *
@@ -19,11 +19,14 @@ from constants import *
 UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
+DEBUG_MODE = True
+
 JOBS = {}
 #HOST = '172.23.98.63'
 HOST = '127.0.0.1'
 
-MAX_RETRIES_NUM = 3
+MAX_INSTALL_RETRIES_NUM = 3
+MAX_TESTS_RUN_RETRIES_NUM = 5
 
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
@@ -239,7 +242,8 @@ def purgeDisabled(job, bucket):
         # reconstruct doc id
         bid = bid + 1
         oldKey = "%s-%s" % (name, bid)
-        oldKey = hashlib.md5(oldKey).hexdigest()
+        if not DEBUG_MODE:
+            oldKey = hashlib.md5(oldKey).hexdigest()
         # purge
         try:
             client.remove(oldKey)
@@ -424,7 +428,8 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
 
                 try:
                     oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                    oldKey = hashlib.md5(oldKey).hexdigest()
+                    if not DEBUG_MODE:
+                        oldKey = hashlib.md5(oldKey).hexdigest()
                     client.remove(oldKey)
                     # print "DELETED- %d:%s" % (bid, histKey)
                 except:
@@ -433,7 +438,8 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 continue  # already have this build results
 
             key = "%s-%s" % (doc["name"], doc["build_id"])
-            key = hashlib.md5(key).hexdigest()
+            if not DEBUG_MODE:
+                key = hashlib.md5(key).hexdigest()
 
             try:  # get custom claim if exists
                 oldDoc = client.get(key)
@@ -460,7 +466,7 @@ def searchString(url,pattern):
     m = re.findall(pattern,consoleText,re.M)
     return m
 
-def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey):
+def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey, rerun_param="", isAnyfailedInstall=False, isAnyFailedTest=False):
     print("Re-trigger the failedInstall jenkins job through test_suite_dispatcher...")
     # non default regression poolId or not None addPoolId
     nondefaultcomponents = [
@@ -489,21 +495,27 @@ def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey):
     dispatcher = ""
     retries = ""
     try:
-        retry_doc = json.loads(retry_params)
         for key, value in retry_doc.iteritems():
-            if key != "retries":
+            if key != "install_retries" and key != "tests_run_retries":
                 retry_get_params = retry_get_params + "&" + key + "=" + value
         dispatcher = retry_doc["dispatcher"]
-        retries = retry_doc["retries"]
+        install_retries = retry_doc["install_retries"]
+        tests_run_retries = retry_doc["tests_run_retries"]
 
-        num_retries = int(retries)
-        num_retries = num_retries + 1
-        retry_get_params = retry_get_params + "&retries="+str(num_retries)
+        num_install_retries = int(install_retries)
+        num_tests_run_retries = int(tests_run_retries)
+        if isAnyfailedInstall:
+            num_install_retries = num_install_retries + 1
+        if isAnyFailedTest:
+            num_tests_run_retries = num_tests_run_retries + 1
+        retry_get_params = retry_get_params + "&install_retries=" + str(num_install_retries) + "&tests_run_retries=" + str(num_tests_run_retries)
 
-        if num_retries <= MAX_RETRIES_NUM and retry_get_params != "":
+        if num_install_retries <= MAX_INSTALL_RETRIES_NUM and num_tests_run_retries <= MAX_TESTS_RUN_RETRIES_NUM and retry_get_params != "":
             urlToRun = "http://qa.sc.couchbase.com/job/{1}/buildWithParameters?token={0}". \
             format("extended_sanity", dispatcher)
             urlToRun = urlToRun + retry_get_params
+            if len(rerun_param) > 0:
+                urlToRun = urlToRun + "&include_tests='" + rerun_param + "'"
             print("Re-dispatching URL: " + str(urlToRun))
             response = requests.get(urlToRun, verify=True)
             if not response.ok:
@@ -518,7 +530,8 @@ def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey):
                 print(str(response))
             print("TBD: Removing record from CB...key: " + defaultKeyName)
             # client.remove(defaultKey)
-    except:
+    except Exception as e:
+        print str(e)
         pass
 
 def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
@@ -714,11 +727,19 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
     histKey = doc["name"] + "-" + doc["build"]
 
     defaultKeyName = "%s-%s" % (doc["name"], doc["build_id"])
-    defaultKey = hashlib.md5(defaultKeyName).hexdigest()
+    if not DEBUG_MODE:
+        defaultKey = hashlib.md5(defaultKeyName).hexdigest()
+    else:
+        defaultKey = defaultKeyName
 
     # new name to have count
-    doc["name"] = doc["name"] + ".1"
-    key = _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc["name"], doc["build"], doc["build_id"])
+    if isAnyfailedInstall or isAnyFailedTest:
+        doc["name"] = doc["name"] + ".1"
+
+    key = _generate_document_key(isAnyfailedInstall=isAnyfailedInstall, isAnyFailedTest=isAnyFailedTest,
+                                 doc_name=doc["name"],
+                                 build=doc["build"], os=doc['os'], component=doc['component'],
+                                 subcomponent=doc['subcomponent'], tag=retry_doc['tag'], version="1")
 
     if extra_fields!= '':
         doc.update(json.loads(extra_fields))
@@ -732,15 +753,28 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             oldName = existingKeyVal.value['name']
             newName = oldName
             newCount = 1
-            #print("oldName="+oldName)
-            if '.' in oldName:
-                nameParts = oldName.split(".")
-                newName = '.'.join(nameParts[0:-1])
-                oldCount = int(nameParts[-1])
-                newCount = oldCount + 1
+            if isAnyfailedInstall or isAnyFailedTest:
+                key_template_head = "%s-%s_%s" % (doc['os'], doc['component'], doc['subcomponent'])
+                key_template_tail = "%s-%s" % (retry_doc['tag'], doc['build'])
 
-            doc["name"] = newName + "." + str(newCount)
-            key = _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc["name"], doc["build"], doc["build_id"])
+                latest_fail_key = _find_latest_fail_key(client, key_template_head, key_template_tail)
+                existingKeyVal = client.get(latest_fail_key)
+                # print("existing:"+ str(existingKeyVal))
+                print("Warning: document key exists")
+                oldName = existingKeyVal.value['name']
+                newName = oldName
+                if '.' in oldName:
+                    nameParts = oldName.split(".")
+                    newName = '.'.join(nameParts[0:-1])
+                    oldCount = int(nameParts[-1])
+                    newCount = oldCount + 1
+
+                doc["name"] = newName + "." + str(newCount)
+            key = _generate_document_key(isAnyfailedInstall=isAnyfailedInstall, isAnyFailedTest=isAnyFailedTest,
+                                         doc_name=doc["name"],
+                                         build=doc["build"], os=doc['os'], component=doc['component'],
+                                         subcomponent=doc['subcomponent'], tag=retry_doc['tag'],
+                                         version=str(newCount))
         except Exception as e:
             print(e)
             pass
@@ -748,7 +782,8 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         doc["lastUpdated"] = str(datetime.datetime.utcnow())
         print(key, doc)
 
-        key = hashlib.md5(key).hexdigest()
+        if not DEBUG_MODE:
+            key = hashlib.md5(key).hexdigest()
         if save != 'no':
             print ("...saving to CB at %s/%s" % (HOST, bucket))
             if save == 'update':
@@ -760,20 +795,34 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
         print "CB client failed, couchbase down or key exists?: %s %s" % (HOST,e)
 
     # Delete and retrigger the jobs
-    if isAnyfailedInstall and delete_retry != 'none':
-        retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey)
+    restart_install_failers = retry_doc['rerun_install_failures'] == 'true'
+    restart_test_failers = retry_doc['rerun_test_failures'] == 'true'
+
+    if isAnyfailedInstall and delete_retry != 'none' and restart_install_failers:
+        retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey, isAnyfailedInstall=isAnyfailedInstall)
     elif isAnyfailedInstall:
         print("warning: failedInstall run but not deleting the record and re-triggering the job.")
+    elif isAnyFailedTest and delete_retry != 'none' and restart_test_failers:
+        restart_test_failers_option = retry_doc['rerun_test_failures_option']
+        restart_test_failers_option = restart_test_failers_option.replace('<test_suite_executor_url>', url)
+        retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey, rerun_param=restart_test_failers_option, isAnyFailedTest=True)
 
-def _generate_document_key(isAnyfailedInstall, isAnyFailedTest, doc_name, build, build_id):
+def _find_latest_fail_key(client, key_template_head, key_template_tail):
+    key = ""
+    query = N1QLQuery("select meta().id from {0} where meta().id like '{1}%{2}%' order by lastUpdated desc limit 1".format(str(client.bucket), key_template_head, key_template_tail))
+    query.adhoc = False
+    for row in client.n1ql_query(query):
+        key = row['id']
+    return key
+
+def _generate_document_key(isAnyfailedInstall=False, isAnyFailedTest=False, os="", component="", subcomponent="", tag="", build="", version="", doc_name=""):
     # build - cb bulid, build_id - jenkins build
     if isAnyfailedInstall:
-        return "%s-failedInstall-%s" % (doc_name, build)
+        return "%s-%s_%s-failedInstall-%s-%s.%s" % (os, component, subcomponent, tag, build, version)
     elif isAnyFailedTest:
-        return "%s-failedTests-%s" % (doc_name, build)
+        return "%s-%s_%s-failedTests-%s-%s.%s" % (os, component, subcomponent, tag, build, version)
     else:
-        return "%s-%s" % (doc_name, build_id)
-
+        return "%s-%s_%s-%s-%s" % (os, component, subcomponent, tag, build)
 
 def storeBuild(client, run, name, view):
     job = getJS(run["url"], {"depth": 0})
@@ -830,7 +879,8 @@ def storeBuild(client, run, name, view):
 
     key = "%s-%s" % (doc["name"], doc["build_id"])
     print key + "," + build
-    key = hashlib.md5(key).hexdigest()
+    if not DEBUG_MODE:
+        key = hashlib.md5(key).hexdigest()
 
     try:
         if version == "4.1.0":
@@ -1066,6 +1116,7 @@ if __name__ == "__main__":
     delete_retry = options.delete_retry
     extra_fields = options.extra_fields
     retry_params = options.retry_params
+    retry_doc = json.loads(retry_params)
 
     if HOST is None or urls == "":
         print "Usage: ",sys.argv[0]," CBhost jenkinsbuildurls [cbsave_flag view_name delete_retry extra_fields]"
