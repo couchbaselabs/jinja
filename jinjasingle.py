@@ -515,7 +515,7 @@ def retriggerAndDeleteJob(doc, url, defaultKeyName, defaultKey, rerun_param="", 
             format("extended_sanity", dispatcher)
             urlToRun = urlToRun + retry_get_params
             if len(rerun_param) > 0:
-                urlToRun = urlToRun + "&include_tests='" + rerun_param + "'"
+                urlToRun = urlToRun + "&include_tests=" + rerun_param
             print("Re-dispatching URL: " + str(urlToRun))
             response = requests.get(urlToRun, verify=True)
             if not response.ok:
@@ -780,6 +780,9 @@ def storeTestData(url, view, first_pass=True, lastTotalCount=-1, claimedBuilds=N
             pass
 
         doc["lastUpdated"] = str(datetime.datetime.utcnow())
+        doc["tag"] = retry_doc["tag"]
+        if isAnyfailedInstall or isAnyFailedTest:
+            doc["type"] = "failedTests" if isAnyFailedTest else "failedInstall"
         print(key, doc)
 
         if not DEBUG_MODE:
