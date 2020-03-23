@@ -555,18 +555,21 @@ def getOsComponent(name, view):
     for os in PLATFORMS:
         if os in name.upper():
             _os = os
+            break
 
     if _os is None:
         # attempt partial name lookup
         for os in PLATFORMS:
             if os[:3] == name.upper()[:3]:
                 _os = os
+                break
 
     if (_os is None and view["bucket"] != "sync_gateway" and view["bucket"] != "cblite"):
         # attempt initial name lookup
         for os in PLATFORMS:
             if os[:1] == name.upper()[:1]:
                 _os = os
+                break
 
     #    if _os is None:
     #        print "%s: job name has unrecognized os: %s" %  (view["bucket"], name)
