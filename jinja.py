@@ -291,9 +291,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             actions = res["actions"]
             params = getAction(actions, "parameters")
             if skipCollect(params):
-                job = getJS(url, {"depth": 0})
-                purgeDisabled(job, bucket)
-                return
+                continue
 
             totalCount = getAction(actions, "totalCount") or 0
             failCount = getAction(actions, "failCount") or 0
