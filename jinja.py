@@ -358,7 +358,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 if not doc.get("os") or not doc.get("component"):
                     continue
 
-            getBuildAndPriority(params, is_mobile)
+            doc["build"], doc["priority"] = getBuildAndPriority(params, is_mobile)
 
             if bucket == SG_VIEW["bucket"]:
                 doc["server_version"] = getAction(params, "name",
