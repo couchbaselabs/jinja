@@ -200,6 +200,12 @@ def skipCollect(params):
     return skip_collect_u or skip_collect_l
 
 
+def skipServerCollect(params):
+    skip_collect_u = getAction(params, "name", "SKIP_SERVER_GREENBOARD_COLLECT")
+    skip_collect_l = getAction(params, "name", "skip_server_greenboard_collect")
+    return skip_collect_u or skip_collect_l
+
+
 def isDisabled(job):
     status = job.get("color")
     return status and (status == "disabled")
@@ -247,6 +253,11 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
         purgeDisabled(res, bucket)
         return
 
+    if bucket == "cblite" or bucket == "sync_gateway":
+        is_mobile = True
+    else:
+        is_mobile = False
+
     # operate as 2nd pass if test_executor
     if isExecutor(doc["name"]):
         first_pass = False
@@ -291,6 +302,9 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             actions = res["actions"]
             params = getAction(actions, "parameters")
             if skipCollect(params):
+                continue
+
+            if not is_mobile and skipServerCollect(params):
                 continue
 
             totalCount = getAction(actions, "totalCount") or 0
@@ -344,10 +358,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 if not doc.get("os") or not doc.get("component"):
                     continue
 
-            if bucket == "server":
-                doc["build"], doc["priority"] = getBuildAndPriority(params)
-            else:
-                doc["build"], doc["priority"] = getBuildAndPriority(params, True)
+            getBuildAndPriority(params, is_mobile)
 
             if bucket == SG_VIEW["bucket"]:
                 doc["server_version"] = getAction(params, "name",
