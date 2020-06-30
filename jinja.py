@@ -433,13 +433,19 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             #      doc["customClaim"] = customClaim
             except:
                 pass  # ok, this is new doc
-
-            try:
-                client.upsert(key, doc)
-                buildHist[histKey] = doc["build_id"]
-            except:
-                print "set failed, couchbase down?: %s" % (HOST)
-
+            retries = 5
+            while retries > 0:
+                try:
+                    client.upsert(key, doc)
+                    buildHist[histKey] = doc["build_id"]
+                    break
+                except Exception as e:
+                    print "set failed, couchbase down?: %s" % (HOST)
+                    print e
+                    retries -= 1
+            if retries == 0:
+                with open("errors.txt", 'a+') as error_file:
+                    error_file.writelines(doc.__str__())
             if doc.get("claimedBuilds"):  # rm custom claim
                 del doc["claimedBuilds"]
 
@@ -503,15 +509,22 @@ def storeBuild(client, run, name, view):
     key = "%s-%s" % (doc["name"], doc["build_id"])
     print key + "," + build
     key = hashlib.md5(key).hexdigest()
-
-    try:
-        if version == "4.1.0":
-            # not tracking, remove and ignore
-            client.remove(key)
-        else:
-            client.upsert(key, doc)
-    except Exception as ex:
-        print "set failed, couchbase down?: %s %s" % (HOST, ex)
+    retries = 5
+    while retries > 0:
+        try:
+            if version == "4.1.0":
+                # not tracking, remove and ignore
+                client.remove(key)
+            else:
+                client.upsert(key, doc)
+            break
+        except Exception as e:
+            print "set failed, couchbase down?: %s" % (HOST)
+            print e
+            retries -= 1
+    if retries == 0:
+        with open("errors.txt", 'a+') as error_file:
+            error_file.writelines(doc.__str__())
 
 
 def pollBuild(view):
@@ -691,18 +704,27 @@ def collectBuildInfo(url):
                 continue  # already collected changeset
             except:
                 pass
-            try:
-                if version[:3] == "0.0":
-                    continue
-                if float(version[:3]) > 4.6:
-                    changeset_url = CHANGE_LOG_URL + "?ver={0}&from={1}&to={2}". \
-                        format(version, str(int(build_no) - 1), build_no)
-                    job = getJS(changeset_url, append_api_json=False)
-                    key = version + "-" + build_no[1:].zfill(4)
-                    job = convert_changeset_to_old_format(job, timestamp)
-                client.upsert(key, job)
-            except:
-                print "set failed, couchbase down?: %s" % (HOST)
+            retries = 5
+            if version[:3] == "0.0":
+                continue
+            if float(version[:3]) > 4.6:
+                changeset_url = CHANGE_LOG_URL + "?ver={0}&from={1}" \
+                                                 "&to={2}".format(
+                    version, str(int(build_no) - 1), build_no)
+                job = getJS(changeset_url, append_api_json=False)
+                key = version + "-" + build_no[1:].zfill(4)
+                job = convert_changeset_to_old_format(job, timestamp)
+            while retries > 0:
+                try:
+                    client.upsert(key, job)
+                    break
+                except Exception as e:
+                    print "set failed, couchbase down?: %s" % (HOST)
+                    print e
+                    retries -= 1
+            if retries == 0:
+                with open("errors.txt", 'a+') as error_file:
+                    error_file.writelines(job.__str__())
 
 
 def collectAllBuildInfo():
