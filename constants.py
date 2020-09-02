@@ -7,7 +7,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN", "OSX", "MAC", "SUSE",
                     "OEL", "DOCKER", "K8S"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
-LITE_PLATFORMS = ["ANDROID", "IOS", "JAVA", "XAMARIN", "DOTNET"]
+LITE_PLATFORMS = ["DOTNET", "ANDROID", "IOS", "JAVA"]
 SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
@@ -84,10 +84,13 @@ SERVER_FEATURES = [
     "CBOP-OPERATOR"
 ]
 
-LITE_FEATURES = ["FUNCT-FUNCTIONAL",
+LITE_FEATURES = ["P2P-P2P",
+                 "FUNCT-FUNCTIONAL",
                  "UPGR-UPGRADE",
                  "LISTENER-LISTENER",
-                 "SYSTEM-SYSTEM"]
+                 "SYSTEM-SYSTEM",
+                 "DECODER-DECODER",
+                 "SANITY-SANITY"]
 
 SG_FEATURES = ["SANITY-SANITY",
                "SANIT-SANITY",
@@ -109,23 +112,34 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY", "UNIX-UNIT", "UNIT-UNIT"]
 SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qa.sc.couchbase.com/view/Cloud", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/","http://sdkbuilds.sc.couchbase.com/job/Fast-failover-Java/","http://sdkbuilds.sc.couchbase.com/job/fastfailover-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/feature-java", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/", "http://sdkbuilds.sc.couchbase.com/view/IPV6"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
+               "build_param_name": ["cluster_version", "build",
+                                    "COUCHBASE_SERVER_VERSION"],
                "bucket": "server"}
 
 SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
            "platforms": SG_PLATFORMS,
            "filters": SG_FILTERS,
            "features": SG_FEATURES,
+           "build_param_name": ["SYNC_GATEWAY_VERSION",
+                                "SYNC_GATEWAY_VERSION_OR_COMMIT"],
            "bucket": "sync_gateway"}
 
 LITE_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
              "platforms": LITE_PLATFORMS,
              "features": LITE_FEATURES,
+             "build_param_name": ["UPGRADED_CBLITE_VERSION",
+                                  "COUCHBASE_MOBILE_VERSION", "CBL_iOS_Build",
+                                  "LITE_ANDROID_VERSION", "LITE_IOS_VERSION",
+                                  "LITE_DOTNET_VERSION", "LITE_JAVA_VERSION",
+                                  "XAMARIN_IOS_VERSION", "LITE_JAVAWS_VERSION",
+                                  "LITE_NET_VERSION"],
              "bucket": "cblite"}
 
 BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
               "features": BUILD_FEATURES,
               "bucket": "build"}
+
 
 VIEWS = [SG_VIEW, LITE_VIEW, SERVER_VIEW, BUILD_VIEW]
 

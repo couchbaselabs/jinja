@@ -75,21 +75,14 @@ def getAction(actions, key, value=None):
     return obj
 
 
-def getBuildAndPriority(params, isMobile=False):
+def getBuildAndPriority(params, build_param_names):
     build = None
     priority = DEFAULT_BUILD
     if params:
-        if not isMobile:
-            build = getAction(params, "name", "version_number") or \
-                    getAction(params, "name","cluster_version") or \
-                    getAction(params,"name","build") or \
-                    getAction(params, "name", "COUCHBASE_SERVER_VERSION") or \
-                    DEFAULT_BUILD
-        else:
-            build = getAction(params, "name", "SYNC_GATEWAY_VERSION") or \
-                    getAction(params, "name","SYNC_GATEWAY_VERSION_OR_COMMIT") or \
-                    getAction(params, "name", "COUCHBASE_MOBILE_VERSION") or \
-                    getAction(params, "name", "CBL_iOS_Build")
+        for build_param_name in build_param_names:
+            if getAction(params, "name", build_param_name):
+                build = getAction(params, "name", build_param_name)
+                break
 
         priority = getAction(params, "name", "priority") or P1
         if priority.upper() not in [P0, P1, P2]:
@@ -98,11 +91,21 @@ def getBuildAndPriority(params, isMobile=False):
     if build is None:
         return None, None
 
+    build = processBuildValue(build)
+    if build is None:
+        return None, None
+
+    return build, priority
+
+
+def processBuildValue(build):
     build = build.replace("-rel", "").split(",")[0]
     try:
         _build = build.split("-")
         if len(_build) == 1:
-            raise Exception("Invalid Build number: {} Should follow 1.1.1-0000 naming".format(_build))
+            raise Exception(
+                "Invalid Build number: {} Should follow 1.1.1-0000 naming".format(
+                    _build))
 
         rel, bno = _build[0], _build[1]
         # check partial rel #'s
@@ -115,18 +118,18 @@ def getBuildAndPriority(params, isMobile=False):
         m = re.match("^\d\.\d\.\d{1,5}", rel)
         if m is None:
             print "unsupported version_number: " + build
-            return None, None
+            return None
         m = re.match("^\d{1,10}", bno)
         if m is None:
             print "unsupported version_number: " + build
-            return None, None
+            return None
 
         build = "%s-%s" % (rel, bno.zfill(4))
     except:
         print "unsupported version_number: " + build
-        return None, None
+        return None
 
-    return build, priority
+    return build
 
 
 def getClaimReason(actions):
@@ -253,10 +256,14 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
         purgeDisabled(res, bucket)
         return
 
-    if bucket == "cblite" or bucket == "sync_gateway":
-        is_mobile = True
-    else:
-        is_mobile = False
+    is_cblite = False
+    is_syncgateway = False
+    is_cblite_p2p = False
+
+    if bucket == "cblite":
+        is_cblite = True
+    elif bucket == "sync_gateway":
+        is_syncgateway = True
 
     # operate as 2nd pass if test_executor
     if isExecutor(doc["name"]):
@@ -304,7 +311,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             if skipCollect(params):
                 continue
 
-            if not is_mobile and skipServerCollect(params):
+            if not is_syncgateway and not is_cblite and skipServerCollect(params):
                 continue
 
             totalCount = getAction(actions, "totalCount") or 0
@@ -358,11 +365,29 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                 if not doc.get("os") or not doc.get("component"):
                     continue
 
-            doc["build"], doc["priority"] = getBuildAndPriority(params, is_mobile)
+            if doc["component"] == "P2P":
+                is_cblite_p2p = True
 
-            if bucket == SG_VIEW["bucket"]:
+            doc["build"], doc["priority"] = getBuildAndPriority(params, view["build_param_name"])
+
+            if is_syncgateway:
                 doc["server_version"] = getAction(params, "name",
                                                   "COUCHBASE_SERVER_VERSION")
+            elif is_cblite_p2p:
+                doc["server_version"] = "N/A"
+                doc["sync_gateway_version"] = "N/A"
+            elif is_cblite:
+                doc["server_version"] = getAction(params, "name",
+                                                  "COUCHBASE_SERVER_VERSION")
+                doc["sync_gateway_version"] = getAction(params, "name",
+                                                                "SYNC_GATEWAY_VERSION")
+
+
+            if is_syncgateway or is_cblite or is_cblite_p2p:
+                if "server_version" not in doc or doc["server_version"] is None:
+                    doc["server_version"] = "Unknown"
+                if "sync_gateway_version" not in doc or doc["sync_gateway_version"] is None:
+                    doc["sync_gateway_version"] = "Unknown"
 
             if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
                 res = getJS(url + str(bid), {"depth": 0})
@@ -405,49 +430,117 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             if caveat_should_skip_mobile(doc):
                 continue
 
-            histKey = doc["name"] + "-" + doc["build"]
-            if not first_pass and histKey in buildHist:
+            if is_cblite_p2p:
+                os_arr = doc["name"].upper()
+                os_arr = os_arr.split("P2P")[1].replace("/", "")
+                os_arr = os_arr.split("-")[1:]
+                ok = True
+                for os in os_arr:
+                    os = os.upper()
+                    if os not in view["platforms"]:
+                        ok = False
+                        break
 
-                # print "REJECTED- doc already in build results: %s" % doc
-                # print buildHist
+                if not ok:
+                    continue
 
-                # attempt to delete if this record has been stored in couchbase
+                # In the event its p2p to itself, remove dupe
+                os_arr = list(dict.fromkeys(os_arr))
+                build_no_arr = []
 
-                try:
-                    oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                    oldKey = hashlib.md5(oldKey).hexdigest()
-                    client.remove(oldKey)
-                    # print "DELETED- %d:%s" % (bid, histKey)
+                for i in range (len(os_arr)):
+                    os = os_arr[i]
+                    viable_build_params = [build_param for build_param in view["build_param_name"] if os.upper() in build_param.upper()]
+                    for build_param in viable_build_params:
+                        param_value = getAction(params, "name", build_param)
+                        if param_value:
+                            build_no = processBuildValue(param_value)
+                            if build_no is not None:
+                                build_no_arr.append(build_no)
+                            break
+
+                if len(build_no_arr) != len(os_arr) or len(os_arr) < 1:
+                    continue
+
+                for i in range(len(os_arr)):
+                    os = os_arr[i]
+                    build_no = build_no_arr[i]
+
+                    doc["os"] = os
+                    doc["build"] = build_no
+
+                    histKey = doc["name"] + "-" + doc["build"] + doc["os"]
+                    if not first_pass and histKey in buildHist:
+                        try:
+                            oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                            oldKey = hashlib.md5(oldKey).hexdigest()
+                            client.remove(oldKey)
+                        except:
+                            pass
+
+                        continue
+
+                    key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                    key = hashlib.md5(key).hexdigest()
+
+                    retries = 5
+                    while retries > 0:
+                        try:
+                            client.upsert(key, doc)
+                            buildHist[histKey] = doc["build_id"]
+                            break
+                        except Exception as e:
+                            print "set failed, couchbase down?: %s" % (HOST)
+                            print e
+                            retries -= 1
+                    if retries == 0:
+                        with open("errors.txt", 'a+') as error_file:
+                            error_file.writelines(doc.__str__())
+
+            else:
+                histKey = doc["name"] + "-" + doc["build"]
+                if not first_pass and histKey in buildHist:
+
+                    # print "REJECTED- doc already in build results: %s" % doc
+                    # print buildHist
+
+                    # attempt to delete if this record has been stored in couchbase
+
+                    try:
+                        oldKey = "%s-%s" % (doc["name"], doc["build_id"])
+                        oldKey = hashlib.md5(oldKey).hexdigest()
+                        client.remove(oldKey)
+                        # print "DELETED- %d:%s" % (bid, histKey)
+                    except:
+                        pass
+
+                    continue  # already have this build results
+
+                key = "%s-%s" % (doc["name"], doc["build_id"])
+                key = hashlib.md5(key).hexdigest()
+
+                try:  # get custom claim if exists
+                    oldDoc = client.get(key)
+                    customClaim = oldDoc.value.get('customClaim')
+                #  if customClaim is not None:
+                #      doc["customClaim"] = customClaim
                 except:
-                    pass
-
-                continue  # already have this build results
-
-            key = "%s-%s" % (doc["name"], doc["build_id"])
-            key = hashlib.md5(key).hexdigest()
-
-            try:  # get custom claim if exists
-                oldDoc = client.get(key)
-                customClaim = oldDoc.value.get('customClaim')
-            #  if customClaim is not None:
-            #      doc["customClaim"] = customClaim
-            except:
-                pass  # ok, this is new doc
-            retries = 5
-            while retries > 0:
-                try:
-                    client.upsert(key, doc)
-                    buildHist[histKey] = doc["build_id"]
-                    break
-                except Exception as e:
-                    print "set failed, couchbase down?: %s" % (HOST)
-                    print e
-                    retries -= 1
-            if retries == 0:
-                with open("errors.txt", 'a+') as error_file:
-                    error_file.writelines(doc.__str__())
-            if doc.get("claimedBuilds"):  # rm custom claim
-                del doc["claimedBuilds"]
+                    pass  # ok, this is new doc
+                retries = 5
+                while retries > 0:
+                    try:
+                        client.upsert(key, doc)
+                        buildHist[histKey] = doc["build_id"]
+                        break
+                    except Exception as e:
+                        print "set failed, couchbase down?: %s" % (HOST)
+                        print e
+                        retries -= 1
+                if retries == 0:
+                    with open("errors.txt", 'a+') as error_file:
+                        error_file.writelines(doc.__str__())
+                if doc.get("claimedBuilds"):  # rm custom claim
+                    del doc["claimedBuilds"]
 
     if first_pass:
         storeTest(jobDoc, view, first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
