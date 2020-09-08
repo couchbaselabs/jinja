@@ -386,6 +386,8 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             if is_syncgateway or is_cblite or is_cblite_p2p:
                 if "server_version" not in doc or doc["server_version"] is None:
                     doc["server_version"] = "Unknown"
+
+            if is_cblite or is_cblite_p2p:
                 if "sync_gateway_version" not in doc or doc["sync_gateway_version"] is None:
                     doc["sync_gateway_version"] = "Unknown"
 
