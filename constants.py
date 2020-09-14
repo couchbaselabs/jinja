@@ -112,8 +112,8 @@ BUILD_FEATURES = ["SANITY-BUILD_SANITY", "UNIX-UNIT", "UNIT-UNIT"]
 SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qa.sc.couchbase.com/view/Cloud", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/LCB/job/server-build-test-lcb/","http://sdkbuilds.sc.couchbase.com/job/Fast-failover-Java/","http://sdkbuilds.sc.couchbase.com/job/fastfailover-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/feature-java", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/", "http://sdkbuilds.sc.couchbase.com/view/IPV6"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
-               "build_param_name": ["cluster_version", "build",
-                                    "COUCHBASE_SERVER_VERSION"],
+               "build_param_name": ["version_number", "cluster_version",
+                                    "build", "COUCHBASE_SERVER_VERSION"],
                "bucket": "server"}
 
 SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
