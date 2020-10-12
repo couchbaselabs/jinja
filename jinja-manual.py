@@ -31,8 +31,8 @@ def getJS(url, params = None, retry = 5):
 
     return res
 
-def getAction(actions, key, value = None):
 
+def getAction(actions, key, value = None):
     obj = None
     for a in actions:
         if a is None:

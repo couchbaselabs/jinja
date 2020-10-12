@@ -432,6 +432,15 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             if caveat_should_skip_mobile(doc):
                 continue
 
+
+            if "additional_fields" in view:
+                for additional_field_key, additional_field_value in view["additional_fields"].iteritems():
+                    for value_pairs in additional_field_value:
+                        if value_pairs[0].upper() in doc["name"].upper():
+                            doc[additional_field_key] = value_pairs[1].upper()
+                            break
+
+
             if is_cblite_p2p:
                 os_arr = doc["name"].upper()
                 os_arr = os_arr.split("P2P")[1].replace("/", "")
@@ -681,7 +690,7 @@ def getOsComponent(name, view):
                 _os = os
                 break
 
-    if (_os is None and view["bucket"] != "sync_gateway" and view["bucket"] != "cblite"):
+    if _os is None and view["bucket"] != "sync_gateway" and view["bucket"] != "cblite":
         # attempt initial name lookup
         for os in PLATFORMS:
             if os[:1] == name.upper()[:1]:
@@ -730,6 +739,15 @@ def pollTest(view):
                 filters_met = True
 
             if not filters_met:
+                continue
+
+            none_filters_met = True
+            if "none_filters" in view:
+                for filter_item in view["none_filters"]:
+                    if filter_item.upper() in job["name"].upper():
+                        none_filters_met = False
+
+            if not none_filters_met:
                 continue
 
             os, comp = getOsComponent(doc["name"], view)

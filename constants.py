@@ -7,7 +7,6 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN", "OSX", "MAC", "SUSE",
                     "OEL", "DOCKER", "K8S"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
-LITE_PLATFORMS = ["DOTNET", "ANDROID", "IOS", "JAVA"]
 SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
@@ -124,16 +123,59 @@ SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
                                 "SYNC_GATEWAY_VERSION_OR_COMMIT"],
            "bucket": "sync_gateway"}
 
-LITE_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
-             "platforms": LITE_PLATFORMS,
-             "features": LITE_FEATURES,
-             "build_param_name": ["UPGRADED_CBLITE_VERSION",
-                                  "COUCHBASE_MOBILE_VERSION", "CBL_iOS_Build",
-                                  "LITE_ANDROID_VERSION", "LITE_IOS_VERSION",
-                                  "LITE_DOTNET_VERSION", "LITE_JAVA_VERSION",
-                                  "XAMARIN_IOS_VERSION", "LITE_JAVAWS_VERSION",
-                                  "LITE_NET_VERSION"],
-             "bucket": "cblite"}
+CBLITE_JAVA_VIEW = {
+    "urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
+    "platforms": ["JAVA"],
+    "features": LITE_FEATURES,
+    "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
+                         "LITE_JAVA_VERSION", "LITE_JAVAWS_VERSION"],
+    "additional_fields": {
+        "secondary_os": [["CENTOS-7", "CENTOS 7"], ["CENTOS-6", "CENTOS 6"],
+                         ["CENTOS7", "CENTOS 7"], ["CENTOS6", "CENTOS 6"],
+                         ["WINDOWS", "WINDOWS"], ["UBUNTU", "UBUNTU"],
+                         ["CENTOS-8", "CENTOS 8"], ["RHEL-7", "RHEL 7"],
+                         ["RHEL-8", "RHEL 8"], ["SANITY", "Common"],
+                         ["UPGRADE", "Common"]],
+        "build_type": [["webservice", "Web Service"], ["desktop", "Desktop"]]
+    },
+    "bucket": "cblite"
+}
+
+CBLITE_ANDROID_VIEW = {
+    "urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
+    "platforms": ["ANDROID"],
+    "features": LITE_FEATURES,
+    "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
+                         "LITE_ANDROID_VERSION"],
+    "none_filers": ["DOTNET", "XAMARIN"],
+    "bucket": "cblite"
+}
+
+CBLITE_IOS_VIEW = {
+    "urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
+    "platforms": ["IOS"],
+    "features": LITE_FEATURES,
+    "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
+                         "CBL_iOS_Build", "LITE_IOS_VERSION",
+                         "XAMARIN_IOS_VERSION"],
+    "bucket": "cblite"
+}
+
+CBLITE_DOTNET_VIEW = {
+    "urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
+    "platforms": ["DOTNET"],
+    "features": LITE_FEATURES,
+    "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
+                         "LITE_DOTNET_VERSION", "XAMARIN_IOS_VERSION",
+                         "LITE_NET_VERSION"],
+    "additional_fields": {
+        "secondary_os": [["ANDROID", "ANDROID"], ["IOS", "IOS"],
+                         ["WINDOWS", "WINDOWS"], ["SANITY", "Common"],
+                         ["UPGRADE", "Common"]],
+    },
+    "bucket": "cblite"
+}
+
 
 BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
@@ -141,7 +183,8 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "bucket": "build"}
 
 
-VIEWS = [SG_VIEW, LITE_VIEW, SERVER_VIEW, BUILD_VIEW]
+VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW,
+         CBLITE_DOTNET_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
