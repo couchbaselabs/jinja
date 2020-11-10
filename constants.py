@@ -183,8 +183,8 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "bucket": "build"}
 
 
-VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW,
-         CBLITE_DOTNET_VIEW]
+VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_DOTNET_VIEW,
+         CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
