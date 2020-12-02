@@ -744,7 +744,7 @@ def pollTest(view):
             none_filters_met = True
             if "none_filters" in view:
                 for filter_item in view["none_filters"]:
-                    if filter_item.upper() in job["name"].upper():
+                    if filter_item.upper() in job["name"].upper() and "P2P" not in job["name"].upper():
                         none_filters_met = False
 
             if not none_filters_met:

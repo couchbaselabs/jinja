@@ -147,7 +147,7 @@ CBLITE_ANDROID_VIEW = {
     "features": LITE_FEATURES,
     "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
                          "LITE_ANDROID_VERSION"],
-    "none_filers": ["DOTNET", "XAMARIN"],
+    "none_filters": ["DOTNET", "XAMARIN"],
     "bucket": "cblite"
 }
 
@@ -158,6 +158,7 @@ CBLITE_IOS_VIEW = {
     "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
                          "CBL_iOS_Build", "LITE_IOS_VERSION",
                          "XAMARIN_IOS_VERSION"],
+    "none_filters": ["DOTNET", "XAMARIN"],
     "bucket": "cblite"
 }
 

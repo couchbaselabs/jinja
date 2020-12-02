@@ -90,24 +90,17 @@ function OnUpdate(doc,meta) {
         if (doc.hasOwnProperty('secondary_os')){
             build_to_store['secondary_os'] = doc['secondary_os']
         }
+
+        doc_to_insert['os'][os][component][name] =  doc_to_insert['os'][os][component][name].filter(function(buildDoc){
+            return buildDoc['build_id'] !== build_to_store['build_id']
+        })
+
         doc_to_insert['os'][os][component][name].push(build_to_store);
+
         //Sort all the builds for the job and remove any duplicates from it.
         doc_to_insert['os'][os][component][name] = doc_to_insert['os'][os][component][name].sort(function(a, b){
             return b['build_id'] - a['build_id'];
         })
-
-        var seen = {}
-        for (const itemIdx in doc_to_insert['os'][os][component][name]){
-            var item = doc_to_insert['os'][os][component][name][itemIdx]
-            if (seen.hasOwnProperty(item.id)){
-                if (seen[item.id]['build_id']  === item['build_id']){
-                    seen[item.id] = item
-                }
-            }else{
-                seen[item.id] = item
-            }
-        }
-        doc_to_insert['os'][os][component][name] = Object.values(seen)
 
         doc_to_insert['os'][os][component][name][0]['olderBuild'] = false;
         for(var i = 1; i < doc_to_insert['os'][os][component][name].length; i++ ){
