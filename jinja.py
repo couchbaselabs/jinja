@@ -275,10 +275,8 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
         bids = [b["number"] for b in res["builds"]]
 
         if isExecutor(doc["name"]):
-            # include more history
-            start = bids[0] - 300
-            if start > 0:
-                bids = range(start, bids[0] + 1)
+            # include all jenkins history
+            bids = list(range(res["firstBuild"]["number"], res["lastBuild"]["number"] + 1))
             bids.reverse()
         elif first_pass:
             bids.reverse()  # bottom to top 1st pass
@@ -319,11 +317,16 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             skipCount = getAction(actions, "skipCount") or 0
             doc["claim"] = getClaimReason(actions)
             if totalCount == 0:
-                if lastTotalCount == -1:
-                    continue  # no tests ever passed for this build
-                else:
-                    totalCount = lastTotalCount
-                    failCount = totalCount
+                if not isExecutor(doc["name"]):
+                    # skip non executor jobs where totalCount == 0 and no lastTotalCount
+                    if lastTotalCount == -1:
+                        continue
+                    else:
+                        # only set totalCount to lastTotalCount if this is not an executor job
+                        # if this is an executor job, the last run will probably be a completely 
+                        # different set of tests so lastTotalCount is irrelevant
+                        totalCount = lastTotalCount
+                        failCount = totalCount
             else:
                 lastTotalCount = totalCount
 
@@ -393,7 +396,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
 
             if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
                 res = getJS(url + str(bid), {"depth": 0})
-                if "description" in res:
+                if "description" in res and res["description"] is not None:
                     params = res['description'].split(",")
                     try:
                         operator_version = params[0].split(":")[1]
