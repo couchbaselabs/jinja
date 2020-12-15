@@ -710,6 +710,9 @@ def getOsComponent(name, view):
             _comp = _c
             break
 
+    if _comp == "COUCHSTORE":
+        _os = "MAGMA"
+
     #    if _comp is None:
     #        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)
 
