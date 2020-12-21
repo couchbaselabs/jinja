@@ -291,11 +291,23 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     JOBS[doc["name"]].append(bid)
 
             doc["build_id"] = bid
-            res = getJS(url + str(bid), {"depth": 0})
-            if res is None:
-                continue
 
-            if "result" not in res:
+            should_process = False
+
+            for _ in range(2):
+                res = getJS(url + str(bid), {"depth": 0})
+                if res is None or "result" not in res:
+                    break
+                # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
+                # e.g. result set to success, test result processed, result updated, duration updated.
+                if res["duration"] == 0:
+                    print "Sleeping for 10 seconds, potential Jenkins race condition detected..."
+                    time.sleep(10)
+                else:
+                    should_process = True
+                    break
+
+            if not should_process:
                 continue
 
             doc["result"] = res["result"]
