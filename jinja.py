@@ -296,7 +296,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
 
             for _ in range(2):
                 res = getJS(url + str(bid), {"depth": 0})
-                if res is None or "result" not in res:
+                if res is None or "result" not in res or res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
                     break
                 # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
                 # e.g. result set to success, test result processed, result updated, duration updated.
@@ -312,9 +312,6 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
 
             doc["result"] = res["result"]
             doc["duration"] = res["duration"]
-
-            if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                continue  # unknown result state
 
             actions = res["actions"]
             params = getAction(actions, "parameters")
