@@ -132,21 +132,34 @@ def processBuildValue(build):
     return build
 
 
-def getClaimReason(actions):
+def getClaimReason(actions, analyse_log, job_url):
     reason = ""
 
-    if not getAction(actions, "claimed"):
-        return reason  # job not claimed
-
-    reason = getAction(actions, "reason") or ""
-    try:
-        rep_dict = {m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
-            format(m, m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
-        if rep_dict:
-            pattern = re.compile('|'.join(rep_dict.keys()))
-            reason = pattern.sub(lambda x: rep_dict[x.group()], reason)
-    except Exception as e:
-        pass
+    if getAction(actions, "claimed"):
+        reason = getAction(actions, "reason") or ""
+        try:
+            rep_dict = {m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
+                format(m, m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
+            if rep_dict:
+                pattern = re.compile('|'.join(rep_dict.keys()))
+                reason = pattern.sub(lambda x: rep_dict[x.group()], reason)
+        except Exception as e:
+            pass
+    elif analyse_log:
+        try:
+            reason = ""
+            for line in requests.get(job_url + '/consoleText', timeout=60, stream=True).iter_lines():
+                if reason != "":
+                    break
+                for [claim, causes] in CLAIM_MAP.items():
+                    if reason != "":
+                        break
+                    for cause in causes:
+                        if cause in line:
+                            reason = claim + ": " + line
+                            break
+        except Exception:
+            pass
 
     return reason
 
@@ -324,7 +337,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             totalCount = getAction(actions, "totalCount") or 0
             failCount = getAction(actions, "failCount") or 0
             skipCount = getAction(actions, "skipCount") or 0
-            doc["claim"] = getClaimReason(actions)
+            doc["claim"] = getClaimReason(actions, totalCount == 0 and res["result"] == "FAILURE", url + str(bid))
             if totalCount == 0:
                 if not isExecutor(doc["name"]):
                     # skip non executor jobs where totalCount == 0 and no lastTotalCount

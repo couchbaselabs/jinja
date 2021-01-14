@@ -216,3 +216,11 @@ CB_RELEASE_BUILDS = {"0.0.0":"0000",
                      "5.5.0":"2958", "5.5.1":"3511", "5.5.2":"3733", "5.5.3":"4041",
                      "5.5.4":"4338", "5.5.5":"4521", "6.0.0":"1693", "6.0.1":"2037",
                      "6.0.2":"2413", "6.0.3":"0000", "6.5.0":"0000"}
+
+CLAIM_MAP = {
+    "git error": ["hudson.plugins.git.GitException"],
+    "SSH error": ["paramiko.ssh_exception.SSHException"],
+    "install failed": ["INSTALL FAILED ON"],
+    "IPv6 test on IPv4 host": ["Cannot enable IPv6 on an IPv4 machine"],
+    "Wrong python SDK version": ["ImportError: cannot import name 'N1QLQuery' from 'couchbase.n1ql'"] 
+}
