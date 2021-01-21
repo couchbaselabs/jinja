@@ -232,5 +232,5 @@ CLAIM_MAP = {
     "Build download failed": ["Unable to copy build to", "Unable to download build in"],
     "install not started": ["INSTALL NOT STARTED ON"],
     "install failed": ["INSTALL FAILED ON"],
-    "No test report xml": ["ERROR: Step ‘Publish JUnit test result report’ failed: No test report files were found. Configuration error?"]
+    "No test report xml": ["ERROR: Step 'Publish JUnit test result report' failed: No test report files were found. Configuration error?"]
 }
