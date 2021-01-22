@@ -5,8 +5,10 @@ import os
 import requests
 import hashlib
 import copy
+import ConfigParser
 
 from threading import Thread
+from requests.auth import HTTPBasicAuth
 
 from couchbase.bucket import Bucket, AuthError
 from couchbase.cluster import Cluster, PasswordAuthenticator
@@ -19,17 +21,34 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 JOBS = {}
 HOST = '172.23.98.63'
 
+config = ConfigParser.ConfigParser()
+config.read("credentials.ini")
+
 if len(sys.argv) == 2:
     HOST = sys.argv[1]
 
+def get_auth(server):
+    auth = None
+    for url in config.sections():
+        if server.startswith(url):
+            try:
+                username = config.get(url, "username")
+                password = config.get(url, "password")
+            except ConfigParser.NoOptionError:
+                pass
+            else:
+                auth = HTTPBasicAuth(username, password)
+                break
+    return auth
 
 def getJS(url, params=None, retry=5, append_api_json=True):
     res = None
+    auth = get_auth(url)
     try:
         if append_api_json:
-            res = requests.get("%s/%s" % (url, "api/json"), params=params, timeout=15)
+            res = requests.get("%s/%s" % (url, "api/json"), params=params, timeout=15, auth=auth)
         else:
-            res = requests.get("%s" % url, params=params, timeout=15)
+            res = requests.get("%s" % url, params=params, timeout=15, auth=auth)
         data = res.json()
         return data
     except:
@@ -146,11 +165,12 @@ def getClaimReason(actions, analyse_log, job_url):
         except Exception as e:
             pass
     elif analyse_log:
+        auth = get_auth(job_url)
         try:
             reason = ""
             timeout = 60
             start_download_time = time.time()
-            for line in requests.get(job_url + '/consoleText', timeout=60, stream=True).iter_lines():
+            for line in requests.get(job_url + '/consoleText', timeout=60, stream=True, auth=auth).iter_lines():
                 # remove non ASCII characters
                 line = re.sub(r'[^ -~]+', '', line)
                 if reason != "" or time.time() > start_download_time + timeout:
