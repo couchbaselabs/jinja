@@ -151,6 +151,8 @@ def getClaimReason(actions, analyse_log, job_url):
             timeout = 60
             start_download_time = time.time()
             for line in requests.get(job_url + '/consoleText', timeout=60, stream=True).iter_lines():
+                # remove non ASCII characters
+                line = re.sub(r'[^ -~]+', '', line)
                 if reason != "" or time.time() > start_download_time + timeout:
                     break
                 for [claim, causes] in CLAIM_MAP.items():
