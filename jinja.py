@@ -606,7 +606,8 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
         storeTest(jobDoc, view, first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
 
 
-def storeBuild(client, run, name, view):
+def storeBuild(run, name, view):
+    client = newClient("server", "password")  # using server bucket (for now)
     job = getJS(run["url"], {"depth": 0})
     if not job:
         print "No job info for build"
@@ -681,8 +682,6 @@ def storeBuild(client, run, name, view):
 
 
 def pollBuild(view):
-    client = newClient("server", "password")  # using server bucket (for now)
-
     tJobs = []
 
     for url in view["urls"]:
@@ -702,13 +701,15 @@ def pollBuild(view):
                 t = None
                 if not j or 'runs' not in j:
                     # single run job
-                    t = Thread(target=storeBuild, args=(client, job, name, view))
+                    t = Thread(target=storeBuild, args=(job, name, view))
+                    t.start()
+                    tJobs.append(t)
                 else:
                     # each run is a result
                     for doc in j["runs"]:
-                        t = Thread(target=storeBuild, args=(client, doc, name, view))
-                t.start()
-                tJobs.append(t)
+                        t = Thread(target=storeBuild, args=(doc, name, view))
+                        t.start()
+                        tJobs.append(t)
                 if len(tJobs) > 10:
                     # intermediate join
                     for t in tJobs:
