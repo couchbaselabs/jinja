@@ -150,12 +150,111 @@ def processBuildValue(build):
 
     return build
 
+def format_stack_trace(raw_stack_trace):
+    raw_stack_trace_lines = raw_stack_trace.split("\\n")
+    if len(raw_stack_trace_lines) > 1:
+        raw_stack_trace = "\\n".join(raw_stack_trace_lines[1:-1])
+    new_stack_trace = ''
+    for i in range(len(raw_stack_trace) - 1):
+        if raw_stack_trace[i] == '\\':
+            if raw_stack_trace[i + 1] == 'n':
+                new_stack_trace = new_stack_trace + '\n'
+                i = i + 1
+            else:
+                new_stack_trace = new_stack_trace + raw_stack_trace[i]
+        else:
+            if not (raw_stack_trace[i - 1] == '\\' and raw_stack_trace[i] == 'n'):
+                new_stack_trace = new_stack_trace + raw_stack_trace[i]
 
-def getClaimReason(actions, analyse_log, job_url):
-    reason = ""
+    return re.sub(r'[^ -~]+', '', new_stack_trace).lstrip("['Traceback (most recent call last):  ")
+
+def get_claim_from_log(job_url):
+    reasons = set()
+    try:
+        auth = get_auth(job_url)
+        timeout = 60
+        start_download_time = time.time()
+        for line in requests.get(job_url + '/consoleText', timeout=60, stream=True, auth=auth).iter_lines():
+            # remove non ASCII characters
+            line = re.sub(r'[^ -~]+', '', line)
+            if time.time() > start_download_time + timeout:
+                break
+            found = False
+            for [claim, causes] in CLAIM_MAP.items():
+                if found:
+                    break
+                for cause in causes:
+                    if cause in line:
+                        reasons.add (claim + ": " + line)
+                        found = True
+                        break
+    except Exception:
+        print("error downloading console ({})".format(job_url))
+    if len(reasons) == 0:
+        return None
+    else:
+        return "<br><br>".join(reasons)
+
+
+# Get all exceptions
+def get_claim_from_test_report(job_url):
+    reasons = set()
+    try:
+        auth = get_auth(job_url)
+        test_report = requests.get(job_url + "/testReport/api/json", timeout=10, auth=auth).json()
+        for suite in test_report["suites"]:
+            for case in suite["cases"]:
+                if case["status"] == "FAILED":
+                    stacktrace = format_stack_trace(case["errorStackTrace"])
+                    found = False
+                    for [claim, causes] in CLAIM_MAP.items():
+                        if found:
+                            break
+                        for cause in causes:
+                            if cause.lower() in stacktrace.lower():
+                                reasons.add(claim + ": " + stacktrace)
+                                found = True
+                                break
+                    if not found:
+                        reasons.add(format_stack_trace(case["errorStackTrace"]))
+    except Exception as e:
+        print(e)
+        print("error downloading test report ({})".format(job_url))
+    if len(reasons) == 0:
+        return None
+    else:
+        return "<br><br>".join(reasons)
+
+# def get_claim_from_test_report(job_url):
+#     try:
+#         auth = get_auth(job_url)
+#         test_report = requests.get(job_url + "/testReport/api/json", timeout=10, auth=auth).json()
+#         for suite in test_report["suites"]:
+#             for case in suite["cases"]:
+#                 if case["status"] == "FAILED":
+#                     stacktrace = format_stack_trace(case["errorStackTrace"])
+#                     found = False
+#                     for [claim, causes] in CLAIM_MAP.items():
+#                         if found:
+#                             break
+#                         for cause in causes:
+#                             if cause.lower() in stacktrace.lower():
+#                                 test_num = test_num_from_name(case["name"])
+#                                 return claim + ": " + stacktrace
+#         for suite in test_report["suites"]:
+#             for case in suite["cases"]:
+#                 if case["status"] == "FAILED":
+#                     return format_stack_trace(case["errorStackTrace"])
+#     except Exception as e:
+#         print(e)
+#         print("error downloading test report ({})".format(job_url))
+#     return None
+
+def getClaimReason(actions, analyse_log, analyse_test_report, job_url):
+    reason = None
 
     if getAction(actions, "claimed"):
-        reason = getAction(actions, "reason") or ""
+        reason = getAction(actions, "reason")
         try:
             rep_dict = {m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
                 format(m, m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
@@ -165,27 +264,12 @@ def getClaimReason(actions, analyse_log, job_url):
         except Exception as e:
             pass
     elif analyse_log:
-        auth = get_auth(job_url)
-        try:
-            reason = ""
-            timeout = 60
-            start_download_time = time.time()
-            for line in requests.get(job_url + '/consoleText', timeout=60, stream=True, auth=auth).iter_lines():
-                # remove non ASCII characters
-                line = re.sub(r'[^ -~]+', '', line)
-                if reason != "" or time.time() > start_download_time + timeout:
-                    break
-                for [claim, causes] in CLAIM_MAP.items():
-                    if reason != "":
-                        break
-                    for cause in causes:
-                        if cause in line:
-                            reason = claim + ": " + line
-                            break
-        except Exception:
-            pass
+        if analyse_test_report:
+            reason = get_claim_from_test_report(job_url)
+        if analyse_log and not reason:
+            reason = get_claim_from_log(job_url)
 
-    return reason
+    return reason or ""
 
 
 # use case# redifine 'xdcr' as 'goxdcr' 4.0.1+
@@ -361,7 +445,11 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             totalCount = getAction(actions, "totalCount") or 0
             failCount = getAction(actions, "failCount") or 0
             skipCount = getAction(actions, "skipCount") or 0
-            doc["claim"] = getClaimReason(actions, totalCount == 0 and res["result"] == "FAILURE", url + str(bid))
+            # failed or no tests passed
+            should_analyse_logs = res["result"] != "SUCCESS"
+            # at least one test executed
+            should_analyse_report = totalCount > 0 and res["result"] != "SUCCESS"
+            doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
             if totalCount == 0:
                 if not isExecutor(doc["name"]):
                     # skip non executor jobs where totalCount == 0 and no lastTotalCount
