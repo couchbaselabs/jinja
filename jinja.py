@@ -725,7 +725,13 @@ def storeBuild(run, name, view):
 
     build = version + "-" + build.zfill(4)
 
-    name = os + "_" + name
+    # Fix CBQE-6406
+    if name == "build_sanity_matrix":
+        node_type = job["fullDisplayName"].split()[2].split(",")[1]
+        name = os + "_" + name + "_" + node_type
+    else:
+        name = os + "_" + name
+
     if getAction(params, "name", "UNIT_TEST"):
         name += "_unit"
 
@@ -734,6 +740,10 @@ def storeBuild(run, name, view):
         return
 
     duration = int(job["duration"]) or 0
+
+    # Fix CBQE-6376
+    if run["url"].endswith(job["id"] + "/"):
+        run["url"] = run["url"].rstrip(job["id"] + "/") + "/"
 
     # lookup pass count fail count version
     doc = {
