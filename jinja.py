@@ -6,6 +6,7 @@ import requests
 import hashlib
 import copy
 import ConfigParser
+import json
 
 from threading import Thread
 from requests.auth import HTTPBasicAuth
@@ -151,34 +152,19 @@ def processBuildValue(build):
     return build
 
 def format_stack_trace(raw_stack_trace):
-    raw_stack_trace_lines = raw_stack_trace.split("\\n")
-    if len(raw_stack_trace_lines) > 1:
-        raw_stack_trace = "\\n".join(raw_stack_trace_lines[1:-1])
-    new_stack_trace = ''
-    for i in range(len(raw_stack_trace) - 1):
-        if raw_stack_trace[i] == '\\':
-            if raw_stack_trace[i + 1] == 'n':
-                new_stack_trace = new_stack_trace + '\n'
-                i = i + 1
-            else:
-                new_stack_trace = new_stack_trace + raw_stack_trace[i]
-        else:
-            if not (raw_stack_trace[i - 1] == '\\' and raw_stack_trace[i] == 'n'):
-                new_stack_trace = new_stack_trace + raw_stack_trace[i]
-
-    return re.sub(r'[^ -~]+', '', new_stack_trace).lstrip("['Traceback (most recent call last):  ")
+    return re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last):  ")
 
 def get_claim_from_log(job_url):
     reasons = set()
     try:
         auth = get_auth(job_url)
-        timeout = 60
+        timeout = 5
         start_download_time = time.time()
-        for line in requests.get(job_url + '/consoleText', timeout=60, stream=True, auth=auth).iter_lines():
+        for line in requests.get(job_url + '/consoleText', timeout=5, stream=True, auth=auth).iter_lines():
             # remove non ASCII characters
             line = re.sub(r'[^ -~]+', '', line)
             if time.time() > start_download_time + timeout:
-                break
+                raise Exception("download timeout")
             found = False
             for [claim, causes] in CLAIM_MAP.items():
                 if found:
@@ -195,13 +181,19 @@ def get_claim_from_log(job_url):
     else:
         return "<br><br>".join(reasons)
 
-
 # Get all exceptions
 def get_claim_from_test_report(job_url):
     reasons = set()
     try:
         auth = get_auth(job_url)
-        test_report = requests.get(job_url + "/testReport/api/json", timeout=10, auth=auth).json()
+        start_download_time = time.time()
+        timeout = 5
+        json_str = ""
+        for char in requests.get(job_url + "/testReport/api/json", timeout=timeout, auth=auth, stream=True).iter_content():
+            if time.time() > start_download_time + timeout:
+                raise Exception("download timeout")
+            json_str += char
+        test_report = json.loads(json_str)
         for suite in test_report["suites"]:
             for case in suite["cases"]:
                 if case["status"] == "FAILED":
@@ -266,7 +258,7 @@ def getClaimReason(actions, analyse_log, analyse_test_report, job_url):
     elif analyse_log:
         if analyse_test_report:
             reason = get_claim_from_test_report(job_url)
-        if analyse_log and not reason:
+        if analyse_log and reason is None:
             reason = get_claim_from_log(job_url)
 
     return reason or ""
