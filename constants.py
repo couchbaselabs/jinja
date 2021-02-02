@@ -12,7 +12,7 @@ SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 SG_FILTERS = ["SYNCGATEWAY", "SYNC-GATEWAY"]
-
+OPERATOR_PLATFORMS = ["GKE-GKE", "AKS-AKS", "EKS-EKS" , "OC-OC"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
@@ -187,9 +187,16 @@ BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_mat
               "features": BUILD_FEATURES,
               "bucket": "build"}
 
+OPERATOR_VIEW = {"urls": ["http://qa.sc.couchbase.com/view/Cloud"],
+                 "platforms":OPERATOR_PLATFORMS,
+                 "features": [],
+                 "build_param_name": ["operator_image"],
+                 "bucket": "operator"
+                 }
 
 VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_DOTNET_VIEW,
-         CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW]
+         CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW,
+         OPERATOR_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
@@ -215,7 +222,8 @@ CB_RELEASE_BUILDS = {"0.0.0":"0000",
                      "5.1.0":"5552", "5.1.1":"5723", "5.1.2":"6030", "5.1.3":"6212",
                      "5.5.0":"2958", "5.5.1":"3511", "5.5.2":"3733", "5.5.3":"4041",
                      "5.5.4":"4338", "5.5.5":"4521", "6.0.0":"1693", "6.0.1":"2037",
-                     "6.0.2":"2413", "6.0.3":"0000", "6.5.0":"0000"}
+                     "6.0.2":"2413", "6.0.3":"0000", "6.5.0":"0000",
+                     "6.6.0": "7899"}
 
 CLAIM_MAP = {
     "git error": ["hudson.plugins.git.GitException", "python3: can't open file 'testrunner.py': [Errno 2] No such file or directory"],

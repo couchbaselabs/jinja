@@ -65,6 +65,18 @@ def getJS(url, params=None, retry=5, append_api_json=True):
     return res
 
 
+def getConsoleLog(url):
+    res = None
+    try:
+        res =  requests.get("%s/%s" % (url, "consoleText"))
+        if res.status_code == 200:
+            return res.content
+    except ex:
+        print "[Error] url unreachable: %s" % url
+        print "Error: %s" % ex.message
+
+    return res
+
 def getAction(actions, key, value=None):
     if actions is None:
         return None
@@ -349,294 +361,521 @@ def purgeDisabled(job, bucket):
 
 
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
-    jobDoc, view, already_scraped = input
+    try:
+        jobDoc, view, already_scraped = input
 
-    bucket = view["bucket"]
+        bucket = view["bucket"]
 
-    claimedBuilds = claimedBuilds or {}
-    client = newClient(bucket)
+        claimedBuilds = claimedBuilds or {}
+        client = newClient(bucket)
 
-    doc = copy.deepcopy(jobDoc)
-    url = doc["url"]
+        doc = copy.deepcopy(jobDoc)
+        url = doc["url"]
 
-    if url.find("sdkbuilds.couchbase") > -1:
-        url = url.replace("sdkbuilds.couchbase", "sdkbuilds.sc.couchbase")
+        if url.find("sdkbuilds.couchbase") > -1:
+            url = url.replace("sdkbuilds.couchbase", "sdkbuilds.sc.couchbase")
 
-    res = getJS(url, {"depth": 0})
+        res = getJS(url, {"depth": 0})
 
-    if res is None:
-        return
+        if res is None:
+            return
 
-    # do not process disabled jobs
-    if isDisabled(doc):
-        purgeDisabled(res, bucket)
-        return
+        # do not process disabled jobs
+        if isDisabled(doc):
+            purgeDisabled(res, bucket)
+            return
 
-    is_cblite = False
-    is_syncgateway = False
-    is_cblite_p2p = False
+        is_cblite = False
+        is_syncgateway = False
+        is_cblite_p2p = False
 
-    if bucket == "cblite":
-        is_cblite = True
-    elif bucket == "sync_gateway":
-        is_syncgateway = True
+        if bucket == "cblite":
+            is_cblite = True
+        elif bucket == "sync_gateway":
+            is_syncgateway = True
 
-    # operate as 2nd pass if test_executor
-    if isExecutor(doc["name"]):
-        first_pass = False
-
-    buildHist = {}
-    if res.get("lastBuild") is not None:
-
-        bids = [b["number"] for b in res["builds"]]
-
+        # operate as 2nd pass if test_executor
         if isExecutor(doc["name"]):
-            # include all jenkins history
-            bids = list(range(res["firstBuild"]["number"], res["lastBuild"]["number"] + 1))
-            bids.reverse()
-        elif first_pass:
-            bids.reverse()  # bottom to top 1st pass
+            first_pass = False
 
-        for bid in bids:
-            doc = copy.deepcopy(jobDoc)
-            oldName = JOBS.get(doc["name"]) is not None
-            if oldName and bid in JOBS[doc["name"]]:
-                continue  # job already stored
-            else:
-                if oldName and first_pass == False:
-                    JOBS[doc["name"]].append(bid)
+        buildHist = {}
+        if res.get("lastBuild") is not None:
 
-            doc["build_id"] = bid
+            bids = [b["number"] for b in res["builds"]]
 
-            already_scraped_key = doc["url"] + str(doc["build_id"])
+            if isExecutor(doc["name"]):
+                # include all jenkins history
+                bids = list(range(res["firstBuild"]["number"], res["lastBuild"]["number"] + 1))
+                bids.reverse()
+            elif first_pass:
+                bids.reverse()  # bottom to top 1st pass
 
-            if already_scraped_key in already_scraped:
-                continue
-
-            should_process = False
-
-            for _ in range(2):
-                res = getJS(url + str(bid), {"depth": 0})
-                if res is None or "result" not in res or res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
-                    break
-                # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
-                # e.g. result set to success, test result processed, result updated, duration updated.
-                if res["duration"] == 0:
-                    print "Sleeping for 10 seconds, potential Jenkins race condition detected..."
-                    time.sleep(10)
-                else:
-                    should_process = True
-                    break
-
-            if not should_process:
-                continue
-
-            doc["result"] = res["result"]
-            doc["duration"] = res["duration"]
-
-            actions = res["actions"]
-            params = getAction(actions, "parameters")
-            if skipCollect(params):
-                continue
-
-            if not is_syncgateway and not is_cblite and skipServerCollect(params):
-                continue
-
-            totalCount = getAction(actions, "totalCount") or 0
-            failCount = getAction(actions, "failCount") or 0
-            skipCount = getAction(actions, "skipCount") or 0
-            # failed or no tests passed
-            should_analyse_logs = res["result"] != "SUCCESS"
-            # at least one test executed
-            should_analyse_report = totalCount > 0 and res["result"] != "SUCCESS"
-            if totalCount == 0:
-                if not isExecutor(doc["name"]):
-                    # skip non executor jobs where totalCount == 0 and no lastTotalCount
-                    if lastTotalCount == -1:
-                        continue
+            for bid in bids:
+                try:
+                    doc = copy.deepcopy(jobDoc)
+                    oldName = JOBS.get(doc["name"]) is not None
+                    if oldName and bid in JOBS[doc["name"]]:
+                        continue  # job already stored
                     else:
-                        # only set totalCount to lastTotalCount if this is not an executor job
-                        # if this is an executor job, the last run will probably be a completely 
-                        # different set of tests so lastTotalCount is irrelevant
-                        totalCount = lastTotalCount
-                        failCount = totalCount
-            else:
-                lastTotalCount = totalCount
+                        if oldName and first_pass == False:
+                            JOBS[doc["name"]].append(bid)
 
-            doc["failCount"] = failCount
-            doc["totalCount"] = totalCount - skipCount
-            if params is None:
-                # possibly new api
-                if not 'keys' in dir(actions) and len(actions) > 0:
-                    # actions is not a dict and has data
-                    # then use the first object that is a list
-                    for a in actions:
-                        if not 'keys' in dir(a):
-                            params = a
+                    doc["build_id"] = bid
 
-            componentParam = getAction(params, "name", "component")
-            if componentParam is None:
-                testYml = getAction(params, "name", "test")
-                if testYml and testYml.find(".yml"):
-                    testFile = testYml.split(" ")[1]
-                    componentParam = "systest-" + str(os.path.split(testFile)[-1]).replace(".yml", "")
+                    already_scraped_key = doc["url"] + str(doc["build_id"])
 
-            if componentParam:
-                subComponentParam = getAction(params, "name", "subcomponent")
-                if subComponentParam is None:
-                    subComponentParam = "server"
-                osParam = getAction(params, "name", "OS") or getAction(params, "name", "os")
-                if osParam is None:
-                    osParam = doc["os"]
-                if not componentParam or not subComponentParam or not osParam:
-                    continue
+                    if already_scraped_key in already_scraped:
+                        continue
 
-                pseudoName = str(osParam + "-" + componentParam + "_" + subComponentParam)
-                doc["name"] = pseudoName
-                nameOrig = pseudoName
-                _os, _comp = getOsComponent(pseudoName, view)
-                if _os and _comp:
-                    doc["os"] = _os
-                    doc["component"] = _comp
-                if not doc.get("os") or not doc.get("component"):
-                    continue
+                    should_process = False
 
-            if doc["component"] == "P2P":
-                is_cblite_p2p = True
-
-            doc["build"], doc["priority"] = getBuildAndPriority(params, view["build_param_name"])
-
-            if is_syncgateway:
-                doc["server_version"] = getAction(params, "name",
-                                                  "COUCHBASE_SERVER_VERSION")
-            elif is_cblite_p2p:
-                doc["server_version"] = "N/A"
-                doc["sync_gateway_version"] = "N/A"
-            elif is_cblite:
-                doc["server_version"] = getAction(params, "name",
-                                                  "COUCHBASE_SERVER_VERSION")
-                doc["sync_gateway_version"] = getAction(params, "name",
-                                                                "SYNC_GATEWAY_VERSION")
-
-
-            if is_syncgateway or is_cblite or is_cblite_p2p:
-                if "server_version" not in doc or doc["server_version"] is None:
-                    doc["server_version"] = "Unknown"
-
-            if is_cblite or is_cblite_p2p:
-                if "sync_gateway_version" not in doc or doc["sync_gateway_version"] is None:
-                    doc["sync_gateway_version"] = "Unknown"
-
-            if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
-                res = getJS(url + str(bid), {"depth": 0})
-                if "description" in res and res["description"] is not None:
-                    params = res['description'].split(",")
-                    try:
-                        operator_version = params[0].split(":")[1]
-                        op_major_version = operator_version.split("-")[0]
-
-                        cb_version = params[1].split(":")[1]
-
-                        if "-" not in cb_version:
-                            cb_version = CB_RELEASE_BUILDS[cb_version[0:5]]
-                        elif "enterprise" in cb_version:
-                            cb_version = cb_version.split("-")[1][0:5] + "-" + CB_RELEASE_BUILDS[cb_version.split("-")[1][0:5]]
-
-                        upgrade_version = params[2].split(":")[1]
-
-                        if "-" not in upgrade_version:
-                            upgrade_version = upgrade_version[0:5]
-                        elif "enterprise" in upgrade_version:
-                            upgrade_version = upgrade_version.split("-")[1][0:5]
+                    for _ in range(2):
+                        res = getJS(url + str(bid), {"depth": 0})
+                        if res is None or "result" not in res or res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+                            break
+                        # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
+                        # e.g. result set to success, test result processed, result updated, duration updated.
+                        if res["duration"] == 0:
+                            print "Sleeping for 10 seconds, potential Jenkins race condition detected..."
+                            time.sleep(10)
                         else:
-                            upgrade_version = upgrade_version.split("-")[0][0:5]
-
-                        doc["build"] = cb_version
-                        doc["priority"] = 'P0'
-                        doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
-                    except:
-                        pass
-
-            if not doc.get("build"):
-                continue
-
-            # run special caveats on collector
-            doc["component"] = caveat_swap_xdcr(doc)
-            if caveat_should_skip(doc):
-                continue
-
-            if caveat_should_skip_mobile(doc):
-                continue
-
-
-            if "additional_fields" in view:
-                for additional_field_key, additional_field_value in view["additional_fields"].iteritems():
-                    for value_pairs in additional_field_value:
-                        if value_pairs[0].upper() in doc["name"].upper():
-                            doc[additional_field_key] = value_pairs[1].upper()
+                            should_process = True
                             break
 
+                    if not should_process:
+                        continue
 
-            if is_cblite_p2p:
-                os_arr = doc["name"].upper()
-                os_arr = os_arr.split("P2P")[1].replace("/", "")
-                os_arr = os_arr.split("-")[1:]
-                ok = True
-                for os in os_arr:
-                    os = os.upper()
-                    if os not in view["platforms"]:
-                        ok = False
-                        break
+                    doc["result"] = res["result"]
+                    doc["duration"] = res["duration"]
 
-                if not ok:
-                    continue
+                    actions = res["actions"]
+                    params = getAction(actions, "parameters")
+                    if skipCollect(params):
+                        continue
 
-                # In the event its p2p to itself, remove dupe
-                os_arr = list(dict.fromkeys(os_arr))
-                build_no_arr = []
+                    if not is_syncgateway and not is_cblite and skipServerCollect(params):
+                        continue
 
-                for i in range (len(os_arr)):
-                    os = os_arr[i]
-                    viable_build_params = [build_param for build_param in view["build_param_name"] if os.upper() in build_param.upper()]
-                    for build_param in viable_build_params:
-                        param_value = getAction(params, "name", build_param)
-                        if param_value:
-                            build_no = processBuildValue(param_value)
-                            if build_no is not None:
-                                build_no_arr.append(build_no)
+                    totalCount = getAction(actions, "totalCount") or 0
+                    failCount = getAction(actions, "failCount") or 0
+                    skipCount = getAction(actions, "skipCount") or 0
+                    # failed or no tests passed
+                    should_analyse_logs = res["result"] != "SUCCESS"
+                    # at least one test executed
+                    should_analyse_report = totalCount > 0 and res["result"] != "SUCCESS"
+                    if totalCount == 0:
+                        if not isExecutor(doc["name"]):
+                            # skip non executor jobs where totalCount == 0 and no lastTotalCount
+                            if lastTotalCount == -1:
+                                continue
+                            else:
+                                # only set totalCount to lastTotalCount if this is not an executor job
+                                # if this is an executor job, the last run will probably be a completely
+                                # different set of tests so lastTotalCount is irrelevant
+                                totalCount = lastTotalCount
+                                failCount = totalCount
+                    else:
+                        lastTotalCount = totalCount
+
+                    doc["failCount"] = failCount
+                    doc["totalCount"] = totalCount - skipCount
+                    if params is None:
+                        # possibly new api
+                        if not 'keys' in dir(actions) and len(actions) > 0:
+                            # actions is not a dict and has data
+                            # then use the first object that is a list
+                            for a in actions:
+                                if not 'keys' in dir(a):
+                                    params = a
+
+                    componentParam = getAction(params, "name", "component")
+                    if componentParam is None:
+                        testYml = getAction(params, "name", "test")
+                        if testYml and testYml.find(".yml"):
+                            testFile = testYml.split(" ")[1]
+                            componentParam = "systest-" + str(os.path.split(testFile)[-1]).replace(".yml", "")
+
+                    if componentParam:
+                        subComponentParam = getAction(params, "name", "subcomponent")
+                        if subComponentParam is None:
+                            subComponentParam = "server"
+                        osParam = getAction(params, "name", "OS") or getAction(params, "name", "os")
+                        if osParam is None:
+                            osParam = doc["os"]
+                        if not componentParam or not subComponentParam or not osParam:
+                            continue
+
+                        pseudoName = str(osParam + "-" + componentParam + "_" + subComponentParam)
+                        doc["name"] = pseudoName
+                        nameOrig = pseudoName
+                        _os, _comp = getOsComponent(pseudoName, view)
+                        if _os and _comp:
+                            doc["os"] = _os
+                            doc["component"] = _comp
+                        if not doc.get("os") or not doc.get("component"):
+                            continue
+
+                    if doc["component"] == "P2P":
+                        is_cblite_p2p = True
+
+                    doc["build"], doc["priority"] = getBuildAndPriority(params, view["build_param_name"])
+
+                    if is_syncgateway:
+                        doc["server_version"] = getAction(params, "name",
+                                                          "COUCHBASE_SERVER_VERSION")
+                    elif is_cblite_p2p:
+                        doc["server_version"] = "N/A"
+                        doc["sync_gateway_version"] = "N/A"
+                    elif is_cblite:
+                        doc["server_version"] = getAction(params, "name",
+                                                          "COUCHBASE_SERVER_VERSION")
+                        doc["sync_gateway_version"] = getAction(params, "name",
+                                                                        "SYNC_GATEWAY_VERSION")
+
+
+                    if is_syncgateway or is_cblite or is_cblite_p2p:
+                        if "server_version" not in doc or doc["server_version"] is None:
+                            doc["server_version"] = "Unknown"
+
+                    if is_cblite or is_cblite_p2p:
+                        if "sync_gateway_version" not in doc or doc["sync_gateway_version"] is None:
+                            doc["sync_gateway_version"] = "Unknown"
+
+                    if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
+                        res = getJS(url + str(bid), {"depth": 0})
+                        if "description" in res and res["description"] is not None:
+                            params = res['description'].split(",")
+                            try:
+                                operator_version = params[0].split(":")[1]
+                                op_major_version = operator_version.split("-")[0]
+
+                                cb_version = params[1].split(":")[1]
+
+                                if "-" not in cb_version:
+                                    cb_version = CB_RELEASE_BUILDS[cb_version[0:5]]
+                                elif "enterprise" in cb_version:
+                                    cb_version = cb_version.split("-")[1][0:5] + "-" + CB_RELEASE_BUILDS[cb_version.split("-")[1][0:5]]
+
+                                upgrade_version = params[2].split(":")[1]
+
+                                if "-" not in upgrade_version:
+                                    upgrade_version = upgrade_version[0:5]
+                                elif "enterprise" in upgrade_version:
+                                    upgrade_version = upgrade_version.split("-")[1][0:5]
+                                else:
+                                    upgrade_version = upgrade_version.split("-")[0][0:5]
+
+                                doc["build"] = cb_version
+                                doc["priority"] = 'P0'
+                                doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
+                            except:
+                                pass
+
+                    if not doc.get("build"):
+                        continue
+
+                    # run special caveats on collector
+                    doc["component"] = caveat_swap_xdcr(doc)
+                    if caveat_should_skip(doc):
+                        continue
+
+                    if caveat_should_skip_mobile(doc):
+                        continue
+
+
+                    if "additional_fields" in view:
+                        for additional_field_key, additional_field_value in view["additional_fields"].iteritems():
+                            for value_pairs in additional_field_value:
+                                if value_pairs[0].upper() in doc["name"].upper():
+                                    doc[additional_field_key] = value_pairs[1].upper()
+                                    break
+
+
+                    if is_cblite_p2p:
+                        os_arr = doc["name"].upper()
+                        os_arr = os_arr.split("P2P")[1].replace("/", "")
+                        os_arr = os_arr.split("-")[1:]
+                        ok = True
+                        for os in os_arr:
+                            os = os.upper()
+                            if os not in view["platforms"]:
+                                ok = False
+                                break
+
+                        if not ok:
+                            continue
+
+                        # In the event its p2p to itself, remove dupe
+                        os_arr = list(dict.fromkeys(os_arr))
+                        build_no_arr = []
+
+                        for i in range (len(os_arr)):
+                            os = os_arr[i]
+                            viable_build_params = [build_param for build_param in view["build_param_name"] if os.upper() in build_param.upper()]
+                            for build_param in viable_build_params:
+                                param_value = getAction(params, "name", build_param)
+                                if param_value:
+                                    build_no = processBuildValue(param_value)
+                                    if build_no is not None:
+                                        build_no_arr.append(build_no)
+                                    break
+
+                        if len(build_no_arr) != len(os_arr) or len(os_arr) < 1:
+                            continue
+
+                        for i in range(len(os_arr)):
+                            os = os_arr[i]
+                            build_no = build_no_arr[i]
+
+                            doc["os"] = os
+                            doc["build"] = build_no
+
+                            doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                            histKey = doc["name"] + "-" + doc["build"] + doc["os"]
+                            if not first_pass and histKey in buildHist:
+                                try:
+                                    oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                                    oldKey = hashlib.md5(oldKey).hexdigest()
+                                    client.remove(oldKey)
+                                except:
+                                    pass
+
+                                continue
+
+                            key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                            key = hashlib.md5(key).hexdigest()
+
+                            retries = 5
+                            while retries > 0:
+                                try:
+                                    client.upsert(key, doc)
+                                    buildHist[histKey] = doc["build_id"]
+                                    already_scraped.append(already_scraped_key)
+                                    break
+                                except Exception as e:
+                                    print "set failed, couchbase down?: %s" % (HOST)
+                                    print e
+                                    retries -= 1
+                            if retries == 0:
+                                with open("errors.txt", 'a+') as error_file:
+                                    error_file.writelines(doc.__str__())
+
+                    else:
+                        doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                        histKey = doc["name"] + "-" + doc["build"]
+                        if not first_pass and histKey in buildHist:
+
+                            # print "REJECTED- doc already in build results: %s" % doc
+                            # print buildHist
+
+                            # attempt to delete if this record has been stored in couchbase
+
+                            try:
+                                oldKey = "%s-%s" % (doc["name"], doc["build_id"])
+                                oldKey = hashlib.md5(oldKey).hexdigest()
+                                client.remove(oldKey)
+                                # print "DELETED- %d:%s" % (bid, histKey)
+                            except:
+                                pass
+
+                            continue  # already have this build results
+
+                        key = "%s-%s" % (doc["name"], doc["build_id"])
+                        key = hashlib.md5(key).hexdigest()
+
+                        try:  # get custom claim if exists
+                            oldDoc = client.get(key)
+                            customClaim = oldDoc.value.get('customClaim')
+                        #  if customClaim is not None:
+                        #      doc["customClaim"] = customClaim
+                        except:
+                            pass  # ok, this is new doc
+                        retries = 5
+                        while retries > 0:
+                            try:
+                                client.upsert(key, doc)
+                                buildHist[histKey] = doc["build_id"]
+                                already_scraped.append(already_scraped_key)
+                                break
+                            except Exception as e:
+                                print "set failed, couchbase down?: %s" % (HOST)
+                                print e
+                                retries -= 1
+                        if retries == 0:
+                            with open("errors.txt", 'a+') as error_file:
+                                error_file.writelines(doc.__str__())
+                        if doc.get("claimedBuilds"):  # rm custom claim
+                            del doc["claimedBuilds"]
+                except Exception as ex:
+                    print "Some unintented exception occured : %s" % ex
+        if first_pass:
+            storeTest((jobDoc, view, already_scraped), first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
+    except Exception as ex:
+        print "Some unintented exception occured : %s" % ex
+
+def storeOperator(input, first_pass=True, lastTotalCount=-1,
+                  claimedBuilds=None):
+    try:
+        jobDoc, view, already_scraped = input
+        bucket = view["bucket"]
+
+        claimedBuilds = claimedBuilds or {}
+        client = newClient(bucket)
+
+        doc = copy.deepcopy(jobDoc)
+        url = doc["url"]
+        res = getJS(url, {"depth": 0})
+
+        if res is None:
+            return
+
+        # do not process disabled jobs
+        if isDisabled(doc):
+            purgeDisabled(res, bucket)
+            return
+        buildHist = {}
+        if res.get("lastBuild") is not None:
+
+            bids = [b["number"] for b in res["builds"]]
+
+            if isExecutor(doc["name"]):
+                # include all jenkins history
+                bids = list(range(res["firstBuild"]["number"],
+                                  res["lastBuild"]["number"] + 1))
+                bids.reverse()
+            elif first_pass:
+                bids.reverse()  # bottom to top 1st pass
+
+            for bid in bids:
+                try:
+                    doc = copy.deepcopy(jobDoc)
+                    oldName = JOBS.get(doc["name"]) is not None
+                    if oldName and bid in JOBS[doc["name"]]:
+                        continue  # job already stored
+                    else:
+                        if oldName and first_pass == False:
+                            JOBS[doc["name"]].append(bid)
+
+                    doc["build_id"] = bid
+                    already_scraped_key = doc["url"] + str(doc["build_id"])
+                    if already_scraped_key in already_scraped:
+                        continue
+                    should_process = False
+
+                    for _ in range(2):
+                        res = getJS(url + str(bid), {"depth": 0})
+                        if res is None or "result" not in res or res[
+                            "result"] not in ["SUCCESS", "UNSTABLE", "FAILURE",
+                                              "ABORTED"]:
+                            break
+                        # retry after 10 seconds if jenkins race condition
+                        # where result and duration have not been updated to
+                        # reflect test results
+                        # e.g. result set to success, test result processed,
+                        # result updated, duration updated.
+                        if res["duration"] == 0:
+                            print "Sleeping for 10 seconds, potential Jenkins " \
+                                  "race condition detected..."
+                            time.sleep(10)
+                        else:
+                            should_process = True
                             break
 
-                if len(build_no_arr) != len(os_arr) or len(os_arr) < 1:
-                    continue
+                    if not should_process:
+                        continue
 
-                for i in range(len(os_arr)):
-                    os = os_arr[i]
-                    build_no = build_no_arr[i]
+                    doc["result"] = res["result"]
+                    doc["duration"] = res["duration"]
 
-                    doc["os"] = os
-                    doc["build"] = build_no
+                    actions = res["actions"]
+                    params = getAction(actions, "parameters")
+                    skip_collect = getAction(params, "name", "custom")
+                    if skipCollect(params) or skip_collect:
+                        continue
+                    totalCount = getAction(actions, "totalCount") or 0
+                    failCount = getAction(actions, "failCount") or 0
+                    skipCount = getAction(actions, "skipCount") or 0
+                    should_analyse_logs = res["result"] != "SUCCESS"
+                    should_analyse_report = totalCount > 0 and res[
+                        "result"] != "SUCCESS"
+                    doc["claim"] = getClaimReason(actions,
+                                                  should_analyse_logs,
+                                                  should_analyse_report,
+                                                  url + str(bid))
+                    if totalCount == 0:
+                        if not isExecutor(doc["name"]):
+                            # skip non executor jobs where totalCount == 0
+                            # and no lastTotalCount
+                            if lastTotalCount == -1:
+                                continue
+                            else:
+                                # only set totalCount to lastTotalCount if
+                                # this is not an executor job
+                                # if this is an executor job, the last run
+                                # will probably be a completely
+                                # different set of tests so lastTotalCount is
+                                # irrelevant
+                                totalCount = lastTotalCount
+                                failCount = totalCount
+                    else:
+                        lastTotalCount = totalCount
 
-                    doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
-                    histKey = doc["name"] + "-" + doc["build"] + doc["os"]
+                    doc["failCount"] = failCount
+                    doc["totalCount"] = totalCount - skipCount
+                    kubernetes_version = \
+                        processOperatorKubernetesVersion(getAction(
+                            params, "name", "kubernetes_version"))
+                    if not kubernetes_version:
+                        continue
+                    doc['component'] = kubernetes_version
+                    if not doc['component']:
+                        continue
+                    doc['build'] = getOperatorBuild(params, "%s%s" % (doc[
+                        'url'], doc['build_id']))
+                    doc['priority'] = P1
+                    serverVersion = getAction(params, "name",
+                                                      "server_image")
+                    doc["server_version"] = processOperatorServerVersion(serverVersion)
+                    if not doc.get("build"):
+                        continue
+
+                    histKey = doc["name"] + "-" + doc["build"]
                     if not first_pass and histKey in buildHist:
+
+                        # print "REJECTED- doc already in build results: %s"
+                        # % doc
+                        # print buildHist
+
+                        # attempt to delete if this record has been stored in
+                        # couchbase
+
                         try:
-                            oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                            oldKey = "%s-%s" % (doc["name"], doc["build_id"])
                             oldKey = hashlib.md5(oldKey).hexdigest()
                             client.remove(oldKey)
+                            # print "DELETED- %d:%s" % (bid, histKey)
                         except:
                             pass
 
-                        continue
+                        continue  # already have this build results
 
-                    key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                    key = "%s-%s" % (doc["name"], doc["build_id"])
                     key = hashlib.md5(key).hexdigest()
 
+                    try:  # get custom claim if exists
+                        oldDoc = client.get(key)
+                        customClaim = oldDoc.value.get('customClaim')
+                    #  if customClaim is not None:
+                    #      doc["customClaim"] = customClaim
+                    except:
+                        pass  # ok, this is new doc
                     retries = 5
                     while retries > 0:
                         try:
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
                             already_scraped.append(already_scraped_key)
+                            print "Collected %s" % already_scraped_key
                             break
                         except Exception as e:
                             print "set failed, couchbase down?: %s" % (HOST)
@@ -645,57 +884,17 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     if retries == 0:
                         with open("errors.txt", 'a+') as error_file:
                             error_file.writelines(doc.__str__())
-
-            else:
-                doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
-                histKey = doc["name"] + "-" + doc["build"]
-                if not first_pass and histKey in buildHist:
-
-                    # print "REJECTED- doc already in build results: %s" % doc
-                    # print buildHist
-
-                    # attempt to delete if this record has been stored in couchbase
-
-                    try:
-                        oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                        oldKey = hashlib.md5(oldKey).hexdigest()
-                        client.remove(oldKey)
-                        # print "DELETED- %d:%s" % (bid, histKey)
-                    except:
-                        pass
-
-                    continue  # already have this build results
-
-                key = "%s-%s" % (doc["name"], doc["build_id"])
-                key = hashlib.md5(key).hexdigest()
-
-                try:  # get custom claim if exists
-                    oldDoc = client.get(key)
-                    customClaim = oldDoc.value.get('customClaim')
-                #  if customClaim is not None:
-                #      doc["customClaim"] = customClaim
-                except:
-                    pass  # ok, this is new doc
-                retries = 5
-                while retries > 0:
-                    try:
-                        client.upsert(key, doc)
-                        buildHist[histKey] = doc["build_id"]
-                        already_scraped.append(already_scraped_key)
-                        break
-                    except Exception as e:
-                        print "set failed, couchbase down?: %s" % (HOST)
-                        print e
-                        retries -= 1
-                if retries == 0:
-                    with open("errors.txt", 'a+') as error_file:
-                        error_file.writelines(doc.__str__())
-                if doc.get("claimedBuilds"):  # rm custom claim
-                    del doc["claimedBuilds"]
-
-    if first_pass:
-        storeTest((jobDoc, view, already_scraped), first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
-
+                    if doc.get("claimedBuilds"):  # rm custom claim
+                        del doc["claimedBuilds"]
+                except Exception as ex:
+                    print "Some unintented exception occured : %s" % ex
+        if first_pass:
+            storeOperator((jobDoc, view, already_scraped),
+                          first_pass=False,
+                          lastTotalCount=lastTotalCount,
+                          claimedBuilds=claimedBuilds)
+    except Exception as ex:
+        print "Some unintented exception occured : %s" % ex
 
 def storeBuild(run, name, view):
     client = newClient("server", "password")  # using server bucket (for now)
@@ -870,6 +1069,17 @@ def getOsComponent(name, view):
     return _os, _comp
 
 
+def getOperatorPlatform(name, view):
+    _platform = None
+    PLATFORMS = view["platforms"]
+    for platform in PLATFORMS:
+        platform = platform.split("-")[0]
+        if platform in name.upper():
+            _platform = platform
+            break
+    return _platform
+
+
 def pollTest(view, already_scraped):
     tJobs = []
 
@@ -924,6 +1134,77 @@ def pollTest(view, already_scraped):
     pool.join()
 
 
+
+def polloperator(view, already_scraped):
+    tJobs = []
+
+    for url in view["urls"]:
+        j = getJS(url, {"depth": 0, "tree": "jobs[name,url,color]"})
+        if j is None or j.get('jobs') is None:
+            continue
+
+        for job in j["jobs"]:
+            doc = {}
+            doc["name"] = job["name"]
+            if job["name"] in JOBS:
+                continue
+            JOBS[job["name"]] = []
+            platform = getOperatorPlatform(job["name"], view)
+            if not platform:
+                continue
+            doc['os'] = platform
+            doc["url"] = job["url"]
+            doc["color"] = job.get("color")
+            tJobs.append((doc, view, already_scraped))
+    pool = multiprocessing.Pool()
+    pool.map(storeOperator, tJobs)
+    pool.close()
+    pool.join()
+
+
+def getOperatorBuild(params, url):
+    version = getAction(params, "name", "operator_image")
+    if not version:
+        return None
+    slices = version.split(":")
+    if slices.__len__() < 2:
+        return None
+    version = slices[1]
+    if "latest" in version:
+        consoleText = getConsoleLog(url)
+        if not consoleText:
+            return None
+        _version = re.findall("{\"version\":.*$", consoleText,
+                              re.MULTILINE)
+        if _version.__len__() == 0:
+            return None
+        try:
+            version = json.loads(_version[0])
+            version = version['version']
+            slices = version.split(" ")
+            version = "%s-%s" % (slices[0], slices[2][:-1])
+        except:
+            version = None
+    return version
+
+
+def processOperatorServerVersion(serverVersion):
+    cb_version = serverVersion.split(":")
+    if cb_version.__len__() > 1:
+        cb_version = cb_version[1]
+    else:
+        return "N/A"
+    return cb_version
+
+
+def processOperatorKubernetesVersion(kubernetesVersion):
+    """Return only the major version of kubernetes"""
+    if not kubernetesVersion:
+        return None
+    slices = kubernetesVersion.split(".")
+    if slices.__len__() < 2:
+        return None
+    return "%s.%s" % (slices[0], slices[1])
 
 def convert_changeset_to_old_format(new_doc, timestamp):
     old_format = {}
@@ -1010,7 +1291,6 @@ def newClient(bucket, password="password"):
         auther = PasswordAuthenticator("Administrator", password)
         cluster.authenticate(auther)
         client = cluster.open_bucket(bucket)
-
     return client
 
 
@@ -1032,6 +1312,8 @@ if __name__ == "__main__":
                     already_scraped[view["bucket"]] = manager.list()
                 if view["bucket"] == "build":
                     pollBuild(view)
+                elif view["bucket"] == "operator":
+                    polloperator(view, already_scraped[view["bucket"]])
                 else:
                     pollTest(view, already_scraped[view["bucket"]])
         except Exception as ex:
