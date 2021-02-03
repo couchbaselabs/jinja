@@ -1,3 +1,4 @@
+import multiprocessing
 import re
 import sys
 import time
@@ -347,7 +348,9 @@ def purgeDisabled(job, bucket):
             pass  # delete ok
 
 
-def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
+def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
+    jobDoc, view, already_scraped = input
+
     bucket = view["bucket"]
 
     claimedBuilds = claimedBuilds or {}
@@ -405,6 +408,11 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
 
             doc["build_id"] = bid
 
+            already_scraped_key = doc["url"] + str(doc["build_id"])
+
+            if already_scraped_key in already_scraped:
+                continue
+
             should_process = False
 
             for _ in range(2):
@@ -441,7 +449,6 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
             should_analyse_logs = res["result"] != "SUCCESS"
             # at least one test executed
             should_analyse_report = totalCount > 0 and res["result"] != "SUCCESS"
-            doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
             if totalCount == 0:
                 if not isExecutor(doc["name"]):
                     # skip non executor jobs where totalCount == 0 and no lastTotalCount
@@ -609,6 +616,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     doc["os"] = os
                     doc["build"] = build_no
 
+                    doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                     histKey = doc["name"] + "-" + doc["build"] + doc["os"]
                     if not first_pass and histKey in buildHist:
                         try:
@@ -628,6 +636,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                         try:
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
+                            already_scraped.append(already_scraped_key)
                             break
                         except Exception as e:
                             print "set failed, couchbase down?: %s" % (HOST)
@@ -638,6 +647,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                             error_file.writelines(doc.__str__())
 
             else:
+                doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                 histKey = doc["name"] + "-" + doc["build"]
                 if not first_pass and histKey in buildHist:
 
@@ -671,6 +681,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     try:
                         client.upsert(key, doc)
                         buildHist[histKey] = doc["build_id"]
+                        already_scraped.append(already_scraped_key)
                         break
                     except Exception as e:
                         print "set failed, couchbase down?: %s" % (HOST)
@@ -683,7 +694,7 @@ def storeTest(jobDoc, view, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     del doc["claimedBuilds"]
 
     if first_pass:
-        storeTest(jobDoc, view, first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
+        storeTest((jobDoc, view, already_scraped), first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
 
 
 def storeBuild(run, name, view):
@@ -849,7 +860,7 @@ def getOsComponent(name, view):
     return _os, _comp
 
 
-def pollTest(view):
+def pollTest(view, already_scraped):
     tJobs = []
 
     for url in view["urls"]:
@@ -895,18 +906,14 @@ def pollTest(view):
             doc["url"] = job["url"]
             doc["color"] = job.get("color")
 
-            t = Thread(target=storeTest, args=(doc, view))
-            t.start()
-            tJobs.append(t)
+            tJobs.append((doc, view, already_scraped))
 
-            if len(tJobs) > 10:
-                # intermediate join
-                for t in tJobs:
-                    t.join()
-                tJobs = []
+    pool = multiprocessing.Pool()
+    pool.map(storeTest, tJobs)
+    pool.close()
+    pool.join()
 
-        for t in tJobs:
-            t.join()
+
 
 def convert_changeset_to_old_format(new_doc, timestamp):
     old_format = {}
@@ -1004,14 +1011,19 @@ if __name__ == "__main__":
     tBuild.daemon = True
     tBuild.start()
 
+    manager = multiprocessing.Manager()
+    already_scraped = {}
+
     while True:
         try:
             for view in VIEWS:
                 JOBS = {}
+                if view["bucket"] not in already_scraped:
+                    already_scraped[view["bucket"]] = manager.list()
                 if view["bucket"] == "build":
                     pollBuild(view)
                 else:
-                    pollTest(view)
+                    pollTest(view, already_scraped[view["bucket"]])
         except Exception as ex:
             print "exception occurred during job collection: %s" % (ex)
         time.sleep(120)
