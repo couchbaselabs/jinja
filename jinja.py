@@ -944,10 +944,14 @@ def storeBuild(run, name, view):
     if run["url"].endswith(job["id"] + "/"):
         run["url"] = run["url"].rstrip(job["id"] + "/") + "/"
 
+    should_analyse_logs = result != "SUCCESS"
+    should_analyse_report = totalCount > 0 and result != "SUCCESS"
+    claim = getClaimReason(actions, should_analyse_logs, should_analyse_report, run["url"] + job["id"])
+
     # lookup pass count fail count version
     doc = {
         "build_id": int(job["id"]),
-        "claim": "",
+        "claim": claim,
         "name": name,
         "url": run["url"],
         "component": comp,
