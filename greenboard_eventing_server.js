@@ -51,7 +51,6 @@ function OnUpdate(doc,meta) {
             update_all_jobs_document = true;
         }
         else {
-            old_doc = all_jobs_document
             if (all_jobs_document['server'][os][component][name]['jobs_in'].indexOf(version) == -1){
                 all_jobs_document['server'][os][component][name]['jobs_in'].push(version);
               
@@ -66,7 +65,7 @@ function OnUpdate(doc,meta) {
         }
         var build_to_store = {
             "build_id": doc['build_id'],
-            "claim": "",
+            "claim": doc['claim'],
             "totalCount": doc['totalCount'],
             "result": doc['result'],
             "duration": doc['duration'],
@@ -78,43 +77,54 @@ function OnUpdate(doc,meta) {
             "olderBuild": false,
             "disabled": false
         }
-        doc_to_insert['os'][os][component][name].push(build_to_store);
-        //Sort all the builds for the job and remove any duplicates from it.
-        doc_to_insert['os'][os][component][name] = doc_to_insert['os'][os][component][name].sort(function(a, b){
-            return b['build_id'] - a['build_id'];
-        }).filter(function(item, pos, ary){
-            return !pos || item.build_id != ary[pos - 1].build_id;
-        });
-        doc_to_insert['os'][os][component][name][0]['olderBuild'] = false;
-        for(var i = 1; i < doc_to_insert['os'][os][component][name].length; i++ ){
-            doc_to_insert['os'][os][component][name][i]['olderBuild'] = true;
-        }
-        let counts = get_total_count(doc_to_insert);
-        const totalCount = counts['totalCount'];
-        const failCount = counts['failCount'];
-        log('totalCount', totalCount);
-        log('failCount', failCount);
-        doc_to_insert['totalCount'] = totalCount;
-        doc_to_insert['failCount'] = failCount;
-        tgt[build_version] = doc_to_insert;
-
-        if (update_all_jobs_document) {
-            tgt['existing_builds'] = all_jobs_document
-            for(let i=0; i < 1; i++){
-              let valid = validateExistingBuilds(doc,all_jobs_document["server"][os][component][name],old_doc["server"][os][component]);
-              if (valid) {
-                  break;
-              }
+        let store_build = true;
+        for (let job of doc_to_insert['os'][os][component][name]) {
+            if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
+                store_build = false;
             }
         }
-        
-        for(let i=0; i < 5; i++){
+        if (!store_build){
+            if(!update_all_jobs_document) {
+                return;
+            }
+        }
+        else {
+            doc_to_insert['os'][os][component][name].push(build_to_store);
+            //Sort all the builds for the job and remove any duplicates from it.
+            doc_to_insert['os'][os][component][name] = doc_to_insert['os'][os][component][name].sort(function(a, b){
+                return b['build_id'] - a['build_id'];
+            }).filter(function(item, pos, ary){
+                return !pos || item.build_id != ary[pos - 1].build_id;
+            });
+            doc_to_insert['os'][os][component][name][0]['olderBuild'] = false;
+            for(var i = 1; i < doc_to_insert['os'][os][component][name].length; i++ ){
+                doc_to_insert['os'][os][component][name][i]['olderBuild'] = true;
+            }
+            let counts = get_total_count(doc_to_insert);
+            const totalCount = counts['totalCount'];
+            const failCount = counts['failCount'];
+            log('totalCount', totalCount);
+            log('failCount', failCount);
+            doc_to_insert['totalCount'] = totalCount;
+            doc_to_insert['failCount'] = failCount;
+            const doc_id = build_version.concat("_server");
+            tgt[doc_id] = doc_to_insert;
+            for(let i=0; i < 5; i++){
             let valid = validateData(doc, build_to_store);
             if (valid) {
                 break;
             }
         }
-      
+        }
+        if (update_all_jobs_document) {
+            tgt['existing_builds_server'] = all_jobs_document
+            for(let i=0; i < 1; i++){
+              let valid = validateExistingBuilds(doc,all_jobs_document["server"][os][component][name]);
+              if (valid) {
+                  break;
+              }
+            }
+        }
     } catch (e) {
         log("exception", e);
     }
@@ -123,8 +133,9 @@ function OnUpdate(doc,meta) {
 function OnDelete(meta) {
 }
 
-function get_build_document(build_version,all_jobs_document) {
+function get_build_document(build_version) {
     let build_to_store;
+    const doc_id = build_version.concat("_server");
     var new_build_to_store = {
         "build": build_version,
         "totalCount": 0,
@@ -133,7 +144,7 @@ function get_build_document(build_version,all_jobs_document) {
         "os": {}
     };
     try {
-        build_to_store = tgt[build_version];
+        build_to_store = tgt[doc_id];
     } catch (e) {
         build_to_store = new_build_to_store;
     }
@@ -146,7 +157,7 @@ function get_build_document(build_version,all_jobs_document) {
 function get_all_jobs_document(){
     let all_jobs_document;
     try {
-        all_jobs_document = tgt['existing_builds'];
+        all_jobs_document = tgt['existing_builds_server'];
     } catch (e) {
         all_jobs_document = {};
     }
@@ -203,7 +214,7 @@ function validateExistingBuilds(doc,build_to_store){
       };
 
       function upsertDoc(doc_to_upsert){
-        tgt["existing_builds"] = doc_to_upsert;
+        tgt["existing_builds_server"] = doc_to_upsert;
       }
 
      
@@ -264,7 +275,8 @@ function validateData(doc, build_to_store) {
             const failCount = counts['failCount'];
             doc_to_upsert['totalCount'] = totalCount;
             doc_to_upsert['failCount'] = failCount;
-            tgt[build_version] = doc_to_upsert;
+            const doc_id = build_version.concat("_server");
+            tgt[doc_id] = doc_to_upsert;
         }
         if (doc_to_insert.hasOwnProperty('os')) {
             if (doc_to_insert['os'].hasOwnProperty(os)) {
