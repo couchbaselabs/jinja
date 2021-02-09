@@ -164,8 +164,10 @@ def processBuildValue(build):
 
     return build
 
-def format_stack_trace(raw_stack_trace):
-    return re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last):  ")
+def format_stack_trace(raw_stack_trace, character_limit=1000):
+    # remove non ASCII characters
+    stack = re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last):  ")
+    return (stack[:character_limit] + '...') if len(stack) > character_limit else stack
 
 def get_claim_from_log(job_url):
     reasons = set()
@@ -174,8 +176,7 @@ def get_claim_from_log(job_url):
         timeout = 5
         start_download_time = time.time()
         for line in requests.get(job_url + '/consoleText', timeout=5, stream=True, auth=auth).iter_lines():
-            # remove non ASCII characters
-            line = re.sub(r'[^ -~]+', '', line)
+            line = format_stack_trace(line)
             if time.time() > start_download_time + timeout:
                 raise Exception("download timeout")
             found = False
@@ -221,7 +222,7 @@ def get_claim_from_test_report(job_url):
                                 found = True
                                 break
                     if not found:
-                        reasons.add(format_stack_trace(case["errorStackTrace"]))
+                        reasons.add(stacktrace)
     except Exception as e:
         print(e)
         print("error downloading test report ({})".format(job_url))
@@ -229,31 +230,6 @@ def get_claim_from_test_report(job_url):
         return None
     else:
         return "<br><br>".join(reasons)
-
-# def get_claim_from_test_report(job_url):
-#     try:
-#         auth = get_auth(job_url)
-#         test_report = requests.get(job_url + "/testReport/api/json", timeout=10, auth=auth).json()
-#         for suite in test_report["suites"]:
-#             for case in suite["cases"]:
-#                 if case["status"] == "FAILED":
-#                     stacktrace = format_stack_trace(case["errorStackTrace"])
-#                     found = False
-#                     for [claim, causes] in CLAIM_MAP.items():
-#                         if found:
-#                             break
-#                         for cause in causes:
-#                             if cause.lower() in stacktrace.lower():
-#                                 test_num = test_num_from_name(case["name"])
-#                                 return claim + ": " + stacktrace
-#         for suite in test_report["suites"]:
-#             for case in suite["cases"]:
-#                 if case["status"] == "FAILED":
-#                     return format_stack_trace(case["errorStackTrace"])
-#     except Exception as e:
-#         print(e)
-#         print("error downloading test report ({})".format(job_url))
-#     return None
 
 def getClaimReason(actions, analyse_log, analyse_test_report, job_url):
     reason = None
