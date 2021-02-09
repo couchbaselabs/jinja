@@ -14,6 +14,7 @@ from requests.auth import HTTPBasicAuth
 
 from couchbase.bucket import Bucket, AuthError
 from couchbase.cluster import Cluster, PasswordAuthenticator
+import couchbase.subdocument as SD
 
 from constants import *
 
@@ -335,6 +336,22 @@ def purgeDisabled(job, bucket):
         except Exception as ex:
             pass  # delete ok
 
+def get_expected_total_count(greenboard_bucket, bucket, doc):
+    expected_total_count = None
+    try:
+        expected_total_count = int(greenboard_bucket.lookup_in("existing_builds_"+bucket, SD.get(bucket+"."+doc["os"]+"."+doc["component"]+"."+doc["name"]+".totalCount"))[0])
+    except Exception:
+        pass
+    return expected_total_count
+
+def update_skip_count(greenboard_bucket, view, doc):
+    # if job failed or was aborted, get the expected total count and set skip count to expected total count - actual total count
+    if doc["result"] in ["FAILURE", "ABORTED"]:
+        expected_total_count = get_expected_total_count(greenboard_bucket, view["bucket"], doc)
+        # prevent negative skip count
+        if expected_total_count is not None and expected_total_count > doc["totalCount"]:
+            doc["skipCount"] = expected_total_count - doc["totalCount"]
+            doc["totalCount"] = expected_total_count
 
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
@@ -344,6 +361,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
         claimedBuilds = claimedBuilds or {}
         client = newClient(bucket)
+        greenboard_bucket = newClient("greenboard")
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -455,6 +473,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                     doc["failCount"] = failCount
                     doc["totalCount"] = totalCount - skipCount
+                    doc["skipCount"] = 0
                     if params is None:
                         # possibly new api
                         if not 'keys' in dir(actions) and len(actions) > 0:
@@ -566,6 +585,9 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         doc["os"] = os_to_process
                         doc["build"] = build_no_to_process
 
+                        doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                        update_skip_count(greenboard_bucket, view, doc)
+
                         histKey = doc["name"] + "-" + doc["build"] + doc["os"]
                         if not first_pass and histKey in buildHist:
                             try:
@@ -596,6 +618,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                     else:
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                        update_skip_count(greenboard_bucket, view, doc)
+
                         histKey = doc["name"] + "-" + doc["build"]
                         if not first_pass and histKey in buildHist:
 
@@ -655,6 +679,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
         claimedBuilds = claimedBuilds or {}
         client = newClient(bucket)
+        greenboard_bucket = newClient("greenboard")
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -756,6 +781,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
                     doc["failCount"] = failCount
                     doc["totalCount"] = totalCount - skipCount
+                    doc["skipCount"] = 0
                     kubernetes_version = \
                         processOperatorKubernetesVersion(getAction(
                             params, "name", "kubernetes_version"))
@@ -772,6 +798,9 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                     doc["server_version"] = processOperatorServerVersion(serverVersion)
                     if not doc.get("build"):
                         continue
+
+                    doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                    update_skip_count(greenboard_bucket, view, doc)
 
                     histKey = doc["name"] + "-" + doc["build"]
                     if not first_pass and histKey in buildHist:
@@ -832,6 +861,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
 def storeBuild(run, name, view):
     client = newClient("server", "password")  # using server bucket (for now)
+    greenboard_bucket = newClient("greenboard")
     job = getJS(run["url"], {"depth": 0})
     if not job:
         print "No job info for build"
@@ -843,7 +873,6 @@ def storeBuild(run, name, view):
     actions = job["actions"]
     totalCount = getAction(actions, "totalCount") or 0
     failCount = getAction(actions, "failCount") or 0
-    skipCount = getAction(actions, "skipCount") or 0
 
     if totalCount == 0:
         return
@@ -891,12 +920,15 @@ def storeBuild(run, name, view):
         "component": comp,
         "failCount": failCount,
         "totalCount": totalCount,
+        "skipCount": 0,
         "result": result,
         "duration": duration,
         "priority": "P0",
         "os": os,
         "build": build
     }
+
+    update_skip_count(greenboard_bucket, view, doc)
 
     key = "%s-%s" % (doc["name"], doc["build_id"])
     print key + "," + build
