@@ -558,7 +558,6 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     if caveat_should_skip_mobile(doc):
                         continue
 
-
                     if "additional_fields" in view:
                         for additional_field_key, additional_field_value in view["additional_fields"].iteritems():
                             for value_pairs in additional_field_value:
@@ -566,75 +565,64 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                     doc[additional_field_key] = value_pairs[1].upper()
                                     break
 
-
                     if is_cblite_p2p:
                         os_arr = doc["name"].upper()
                         os_arr = os_arr.split("P2P")[1].replace("/", "")
                         os_arr = os_arr.split("-")[1:]
-                        ok = True
+                        ok = False
+                        os_to_process = ""
                         for os in os_arr:
                             os = os.upper()
-                            if os not in view["platforms"]:
-                                ok = False
+                            if os in view["platforms"]:
+                                ok = True
+                                os_to_process = os
                                 break
 
-                        if not ok:
+                                if not ok:
+                                    continue
+
+                        build_no_to_process = ""
+                        viable_build_params = [build_param for build_param in view["build_param_name"] if os.upper() in build_param.upper()]
+                        for build_param in viable_build_params:
+                            param_value = getAction(params, "name", build_param)
+                            if param_value:
+                                build_no = processBuildValue(param_value)
+                                if build_no is not None:
+                                    build_no_to_process = build_no
+
+                        if build_no_to_process == "" or os_to_process == "":
                             continue
 
-                        # In the event its p2p to itself, remove dupe
-                        os_arr = list(dict.fromkeys(os_arr))
-                        build_no_arr = []
+                        doc["os"] = os_to_process
+                        doc["build"] = build_no_to_process
 
-                        for i in range (len(os_arr)):
-                            os = os_arr[i]
-                            viable_build_params = [build_param for build_param in view["build_param_name"] if os.upper() in build_param.upper()]
-                            for build_param in viable_build_params:
-                                param_value = getAction(params, "name", build_param)
-                                if param_value:
-                                    build_no = processBuildValue(param_value)
-                                    if build_no is not None:
-                                        build_no_arr.append(build_no)
-                                    break
+                        histKey = doc["name"] + "-" + doc["build"] + doc["os"]
+                        if not first_pass and histKey in buildHist:
+                            try:
+                                oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                                oldKey = hashlib.md5(oldKey).hexdigest()
+                                client.remove(oldKey)
+                            except:
+                                pass
 
-                        if len(build_no_arr) != len(os_arr) or len(os_arr) < 1:
                             continue
 
-                        for i in range(len(os_arr)):
-                            os = os_arr[i]
-                            build_no = build_no_arr[i]
+                        key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
+                        key = hashlib.md5(key).hexdigest()
 
-                            doc["os"] = os
-                            doc["build"] = build_no
-
-                            doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
-                            histKey = doc["name"] + "-" + doc["build"] + doc["os"]
-                            if not first_pass and histKey in buildHist:
-                                try:
-                                    oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
-                                    oldKey = hashlib.md5(oldKey).hexdigest()
-                                    client.remove(oldKey)
-                                except:
-                                    pass
-
-                                continue
-
-                            key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
-                            key = hashlib.md5(key).hexdigest()
-
-                            retries = 5
-                            while retries > 0:
-                                try:
-                                    client.upsert(key, doc)
-                                    buildHist[histKey] = doc["build_id"]
-                                    already_scraped.append(already_scraped_key)
-                                    break
-                                except Exception as e:
-                                    print "set failed, couchbase down?: %s" % (HOST)
-                                    print e
-                                    retries -= 1
-                            if retries == 0:
-                                with open("errors.txt", 'a+') as error_file:
-                                    error_file.writelines(doc.__str__())
+                        retries = 5
+                        while retries > 0:
+                            try:
+                                client.upsert(key, doc)
+                                buildHist[histKey] = doc["build_id"]
+                                break
+                            except Exception as e:
+                                print "set failed, couchbase down?: %s" % (HOST)
+                                print e
+                                retries -= 1
+                        if retries == 0:
+                            with open("errors.txt", 'a+') as error_file:
+                                error_file.writelines(doc.__str__())
 
                     else:
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
