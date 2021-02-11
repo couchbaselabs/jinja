@@ -517,36 +517,6 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if "sync_gateway_version" not in doc or doc["sync_gateway_version"] is None:
                             doc["sync_gateway_version"] = "Unknown"
 
-                    if doc["build"] is None and doc["priority"] is None and doc['os'] == "K8S":
-                        res = getJS(url + str(bid), {"depth": 0})
-                        if "description" in res and res["description"] is not None:
-                            params = res['description'].split(",")
-                            try:
-                                operator_version = params[0].split(":")[1]
-                                op_major_version = operator_version.split("-")[0]
-
-                                cb_version = params[1].split(":")[1]
-
-                                if "-" not in cb_version:
-                                    cb_version = CB_RELEASE_BUILDS[cb_version[0:5]]
-                                elif "enterprise" in cb_version:
-                                    cb_version = cb_version.split("-")[1][0:5] + "-" + CB_RELEASE_BUILDS[cb_version.split("-")[1][0:5]]
-
-                                upgrade_version = params[2].split(":")[1]
-
-                                if "-" not in upgrade_version:
-                                    upgrade_version = upgrade_version[0:5]
-                                elif "enterprise" in upgrade_version:
-                                    upgrade_version = upgrade_version.split("-")[1][0:5]
-                                else:
-                                    upgrade_version = upgrade_version.split("-")[0][0:5]
-
-                                doc["build"] = cb_version
-                                doc["priority"] = 'P0'
-                                doc["name"] = doc["name"] + "-opver-" + op_major_version + "-upver-" + upgrade_version
-                            except:
-                                pass
-
                     if not doc.get("build"):
                         continue
 
