@@ -1140,7 +1140,7 @@ def getOperatorBuild(params, url):
     if slices.__len__() < 2:
         return None
     version = slices[1]
-    if "latest" in version:
+    if "latest" in version or "-" not in version:
         consoleText = getConsoleLog(url)
         if not consoleText:
             return None
