@@ -353,6 +353,24 @@ def update_skip_count(greenboard_bucket, view, doc):
             doc["skipCount"] = expected_total_count - doc["totalCount"]
             doc["totalCount"] = expected_total_count
 
+def get_manual_triage_and_bugs(triage_history_bucket, bucket, doc):
+    triage = ""
+    bugs = []
+
+    if doc["result"] != "SUCCESS":
+        try:
+            major_version = doc["build"].split("-")[0]
+            build = int(doc["build"].split("-")[1])
+            key = doc["name"] + "_" + major_version + "_" + bucket
+            triage_history = triage_history_bucket.get(key).value
+            if build >= triage_history["build"]:
+                triage = triage_history["triage"]
+                bugs = triage_history["bugs"]
+        except Exception:
+            pass
+
+    return triage, bugs
+
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
         jobDoc, view, already_scraped = input
@@ -362,6 +380,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
         claimedBuilds = claimedBuilds or {}
         client = newClient(bucket)
         greenboard_bucket = newClient("greenboard")
+        triage_history_bucket = newClient("triage_history")
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -587,6 +606,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
+                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket, view["bucket"], doc)
 
                         histKey = doc["name"] + "-" + doc["build"] + doc["os"]
                         if not first_pass and histKey in buildHist:
@@ -619,6 +639,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     else:
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
+                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket, view["bucket"], doc)
 
                         histKey = doc["name"] + "-" + doc["build"]
                         if not first_pass and histKey in buildHist:
