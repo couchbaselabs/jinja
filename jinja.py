@@ -6,14 +6,13 @@ import os
 import requests
 import hashlib
 import copy
-import ConfigParser
+import configparser
 import json
 
 from threading import Thread
 from requests.auth import HTTPBasicAuth
 
-from couchbase.bucket import Bucket, AuthError
-from couchbase.cluster import Cluster, PasswordAuthenticator
+from couchbase.cluster import Cluster, ClusterOptions, PasswordAuthenticator
 import couchbase.subdocument as SD
 
 from constants import *
@@ -26,7 +25,7 @@ HOST = '172.23.98.63'
 DEFAULT_BUCKET_STORAGE = "COUCHSTORE"
 DEFAULT_GSI_TYPE = "PLASMA"
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 config.read("credentials.ini")
 
 if len(sys.argv) == 2:
@@ -39,7 +38,7 @@ def get_auth(server):
             try:
                 username = config.get(url, "username")
                 password = config.get(url, "password")
-            except ConfigParser.NoOptionError:
+            except configparser.NoOptionError:
                 pass
             else:
                 auth = HTTPBasicAuth(username, password)
@@ -57,7 +56,7 @@ def getJS(url, params=None, retry=5, append_api_json=True):
         data = res.json()
         return data
     except:
-        print "[Error] url unreachable: %s" % url
+        print("[Error] url unreachable: %s" % url)
         res = None
         if retry:
             retry = retry - 1
@@ -75,8 +74,8 @@ def getConsoleLog(url):
         if res.status_code == 200:
             return res.content
     except ex:
-        print "[Error] url unreachable: %s" % url
-        print "Error: %s" % ex.message
+        print("[Error] url unreachable: %s" % url)
+        print("Error: %s" % ex.message)
 
     return res
 
@@ -161,16 +160,16 @@ def processBuildValue(build):
         # verify rel, build
         m = re.match("^\d\.\d\.\d{1,5}", rel)
         if m is None:
-            print "unsupported version_number: " + build
+            print("unsupported version_number: " + build)
             return None
         m = re.match("^\d{1,10}", bno)
         if m is None:
-            print "unsupported version_number: " + build
+            print("unsupported version_number: " + build)
             return None
 
         build = "%s-%s" % (rel, bno.zfill(4))
     except:
-        print "unsupported version_number: " + build
+        print("unsupported version_number: " + build)
         return None
 
     return build
@@ -211,7 +210,7 @@ def get_claim_from_log(job_url):
         auth = get_auth(job_url)
         timeout = 5
         start_download_time = time.time()
-        for line in requests.get(job_url + '/consoleText', timeout=5, stream=True, auth=auth).iter_lines():
+        for line in requests.get(job_url + '/consoleText', timeout=5, stream=True, auth=auth).iter_lines(decode_unicode=True):
             line = format_stack_trace(line)
             if time.time() > start_download_time + timeout:
                 raise Exception("download timeout")
@@ -239,7 +238,7 @@ def get_claim_from_test_report(job_url):
         start_download_time = time.time()
         timeout = 5
         json_str = ""
-        for char in requests.get(job_url + "/testReport/api/json", timeout=timeout, auth=auth, stream=True).iter_content():
+        for char in requests.get(job_url + "/testReport/api/json", timeout=timeout, auth=auth, stream=True).iter_content(decode_unicode=True):
             if time.time() > start_download_time + timeout:
                 raise Exception("download timeout")
             json_str += char
@@ -353,7 +352,7 @@ def isDisabled(job):
 
 
 def purgeDisabled(job, bucket):
-    client = newClient(bucket)
+    client = newClient().bucket(bucket).default_collection()
     name = job["name"]
     bids = [b["number"] for b in job["builds"]]
     if len(bids) == 0:
@@ -364,7 +363,7 @@ def purgeDisabled(job, bucket):
         # reconstruct doc id
         bid = bid + 1
         oldKey = "%s-%s" % (name, bid)
-        oldKey = hashlib.md5(oldKey).hexdigest()
+        oldKey = hashlib.md5(oldKey.encode()).hexdigest()
         # purge
         try:
             client.remove(oldKey)
@@ -459,7 +458,7 @@ def add_variants_to_name(doc):
     Store the original name in displayName to show on greenboard
     """
     doc["displayName"] = doc["name"]
-    for key, value in doc["variants"].iteritems():
+    for key, value in doc["variants"].items():
         doc["name"] += key + "=" + value
 
 
@@ -470,9 +469,10 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
         bucket = view["bucket"]
 
         claimedBuilds = claimedBuilds or {}
-        client = newClient(bucket)
-        greenboard_bucket = newClient("greenboard")
-        triage_history_bucket = newClient("triage_history")
+        cluster = newClient()
+        client = cluster.bucket(bucket).default_collection()
+        greenboard_bucket = cluster.bucket("greenboard").default_collection()
+        triage_history_bucket = cluster.bucket("triage_history").default_collection()
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -541,7 +541,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
                         # e.g. result set to success, test result processed, result updated, duration updated.
                         if res["duration"] == 0:
-                            print "Sleeping for 10 seconds, potential Jenkins race condition detected..."
+                            print("Sleeping for 10 seconds, potential Jenkins race condition detected...")
                             time.sleep(10)
                         else:
                             should_process = True
@@ -662,7 +662,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         continue
 
                     if "additional_fields" in view:
-                        for additional_field_key, additional_field_value in view["additional_fields"].iteritems():
+                        for additional_field_key, additional_field_value in view["additional_fields"].items():
                             for value_pairs in additional_field_value:
                                 if value_pairs[0].upper() in doc["name"].upper():
                                     doc[additional_field_key] = value_pairs[1].upper()
@@ -707,7 +707,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if not first_pass and histKey in buildHist:
                             try:
                                 oldKey = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
-                                oldKey = hashlib.md5(oldKey).hexdigest()
+                                oldKey = hashlib.md5(oldKey.encode()).hexdigest()
                                 client.remove(oldKey)
                             except:
                                 pass
@@ -715,7 +715,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                             continue
 
                         key = "%s-%s-%s" % (doc["name"], doc["build_id"], doc["os"])
-                        key = hashlib.md5(key).hexdigest()
+                        key = hashlib.md5(key.encode()).hexdigest()
 
                         retries = 5
                         while retries > 0:
@@ -724,8 +724,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                 buildHist[histKey] = doc["build_id"]
                                 break
                             except Exception as e:
-                                print "set failed, couchbase down?: %s" % (HOST)
-                                print e
+                                print("set failed, couchbase down?: %s" % (HOST))
+                                print(e)
                                 retries -= 1
                         if retries == 0:
                             with open("errors.txt", 'a+') as error_file:
@@ -752,7 +752,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                             try:
                                 oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                                oldKey = hashlib.md5(oldKey).hexdigest()
+                                oldKey = hashlib.md5(oldKey.encode()).hexdigest()
                                 client.remove(oldKey)
                                 # print "DELETED- %d:%s" % (bid, histKey)
                             except:
@@ -761,7 +761,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                             continue  # already have this build results
 
                         key = "%s-%s" % (doc["name"], doc["build_id"])
-                        key = hashlib.md5(key).hexdigest()
+                        key = hashlib.md5(key.encode()).hexdigest()
 
                         try:  # get custom claim if exists
                             oldDoc = client.get(key)
@@ -778,8 +778,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                 already_scraped.append(already_scraped_key)
                                 break
                             except Exception as e:
-                                print "set failed, couchbase down?: %s" % (HOST)
-                                print e
+                                print("set failed, couchbase down?: %s" % (HOST))
+                                print(e)
                                 retries -= 1
                         if retries == 0:
                             with open("errors.txt", 'a+') as error_file:
@@ -787,11 +787,11 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if doc.get("claimedBuilds"):  # rm custom claim
                             del doc["claimedBuilds"]
                 except Exception as ex:
-                    print "Some unintented exception occured : %s" % ex
+                    print("Some unintented exception occured : %s" % ex)
         if first_pass:
             storeTest((jobDoc, view, already_scraped), first_pass=False, lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
     except Exception as ex:
-        print "Some unintented exception occured : %s" % ex
+        print("Some unintented exception occured : %s" % ex)
 
 def storeOperator(input, first_pass=True, lastTotalCount=-1,
                   claimedBuilds=None):
@@ -800,8 +800,9 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
         bucket = view["bucket"]
 
         claimedBuilds = claimedBuilds or {}
-        client = newClient(bucket)
-        greenboard_bucket = newClient("greenboard")
+        cluster = newClient()
+        client = cluster.bucket(bucket).default_collection()
+        greenboard_bucket = client.bucket("greenboard").default_collection()
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -853,8 +854,8 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                         # e.g. result set to success, test result processed,
                         # result updated, duration updated.
                         if res["duration"] == 0:
-                            print "Sleeping for 10 seconds, potential Jenkins " \
-                                  "race condition detected..."
+                            print("Sleeping for 10 seconds, potential Jenkins " \
+                                  "race condition detected...")
                             time.sleep(10)
                         else:
                             should_process = True
@@ -939,7 +940,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
                         try:
                             oldKey = "%s-%s" % (doc["name"], doc["build_id"])
-                            oldKey = hashlib.md5(oldKey).hexdigest()
+                            oldKey = hashlib.md5(oldKey.encode()).hexdigest()
                             client.remove(oldKey)
                             # print "DELETED- %d:%s" % (bid, histKey)
                         except:
@@ -948,7 +949,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                         continue  # already have this build results
 
                     key = "%s-%s" % (doc["name"], doc["build_id"])
-                    key = hashlib.md5(key).hexdigest()
+                    key = hashlib.md5(key.encode()).hexdigest()
 
                     try:  # get custom claim if exists
                         oldDoc = client.get(key)
@@ -963,11 +964,11 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
                             already_scraped.append(already_scraped_key)
-                            print "Collected %s" % already_scraped_key
+                            print("Collected %s" % already_scraped_key)
                             break
                         except Exception as e:
-                            print "set failed, couchbase down?: %s" % (HOST)
-                            print e
+                            print("set failed, couchbase down?: %s" % (HOST))
+                            print(e)
                             retries -= 1
                     if retries == 0:
                         with open("errors.txt", 'a+') as error_file:
@@ -975,21 +976,22 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                     if doc.get("claimedBuilds"):  # rm custom claim
                         del doc["claimedBuilds"]
                 except Exception as ex:
-                    print "Some unintented exception occured : %s" % ex
+                    print("Some unintented exception occured : %s" % ex)
         if first_pass:
             storeOperator((jobDoc, view, already_scraped),
                           first_pass=False,
                           lastTotalCount=lastTotalCount,
                           claimedBuilds=claimedBuilds)
     except Exception as ex:
-        print "Some unintented exception occured : %s" % ex
+        print("Some unintented exception occured : %s" % ex)
 
 def storeBuild(run, name, view):
-    client = newClient("server", "password")  # using server bucket (for now)
-    greenboard_bucket = newClient("greenboard")
+    cluster = newClient()
+    client = cluster.bucket("server").default_collection() # using server bucket (for now)
+    greenboard_bucket = cluster.bucket("greenboard").default_collection()
     job = getJS(run["url"], {"depth": 0})
     if not job:
-        print "No job info for build"
+        print("No job info for build")
         return
     result = job.get("result")
     if not result:
@@ -1063,8 +1065,8 @@ def storeBuild(run, name, view):
     add_variants_to_name(doc)
 
     key = "%s-%s" % (doc["name"], doc["build_id"])
-    print key + "," + build
-    key = hashlib.md5(key).hexdigest()
+    print(key + "," + build)
+    key = hashlib.md5(key.encode()).hexdigest()
     retries = 5
     while retries > 0:
         try:
@@ -1075,8 +1077,8 @@ def storeBuild(run, name, view):
                 client.upsert(key, doc)
             break
         except Exception as e:
-            print "set failed, couchbase down?: %s" % (HOST)
-            print e
+            print("set failed, couchbase down?: %s" % (HOST))
+            print(e)
             retries -= 1
     if retries == 0:
         with open("errors.txt", 'a+') as error_file:
@@ -1118,7 +1120,7 @@ def pollBuild(view):
                         t.join()
                     tJobs = []
             except Exception as ex:
-                print ex
+                print(ex)
                 pass
     for t in tJobs:
         t.join()
@@ -1340,7 +1342,8 @@ def convert_changeset_to_old_format(new_doc, timestamp):
 
 
 def collectBuildInfo(url):
-    client = newClient('server')
+    cluster = newClient()
+    client = cluster.bucket("server").default_collection()
     res = getJS(url, {"depth": 1, "tree": "builds[number,url]"})
     if res is None:
         return
@@ -1379,8 +1382,8 @@ def collectBuildInfo(url):
                     client.upsert(key, job)
                     break
                 except Exception as e:
-                    print "set failed, couchbase down?: %s" % (HOST)
-                    print e
+                    print("set failed, couchbase down?: %s" % (HOST))
+                    print(e)
                     retries -= 1
             if retries == 0:
                 with open("errors.txt", 'a+') as error_file:
@@ -1394,20 +1397,12 @@ def collectAllBuildInfo():
             for url in BUILDER_URLS:
                 collectBuildInfo(url)
         except Exception as ex:
-            print "exception occurred during build collection: %s" % (ex)
+            print("exception occurred during build collection: %s" % (ex))
 
 
-def newClient(bucket, password="password"):
-    try:
-        client = Bucket(HOST + '/' + bucket)
-    except Exception:
-        # try rbac style auth
-        endpoint = 'couchbase://{0}:{1}?select_bucket=true'.format(HOST, 8091)
-        cluster = Cluster(endpoint)
-        auther = PasswordAuthenticator("Administrator", password)
-        cluster.authenticate(auther)
-        client = cluster.open_bucket(bucket)
-    return client
+def newClient(password="password"):
+    cluster = Cluster("couchbase://" + HOST, ClusterOptions(PasswordAuthenticator("Administrator", password)))
+    return cluster
 
 
 if __name__ == "__main__":
@@ -1433,6 +1428,6 @@ if __name__ == "__main__":
                 else:
                     pollTest(view, already_scraped[view["bucket"]])
         except Exception as ex:
-            print "exception occurred during job collection: %s" % (ex)
+            print("exception occurred during job collection: %s" % (ex))
         time.sleep(120)
 
