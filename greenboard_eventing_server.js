@@ -1,179 +1,186 @@
 function OnUpdate(doc,meta) {
-    try {
-        if(doc === null){
-            return;
-        }
-        const build_version = doc['build'];
-        const build_id = doc['build_id'];
-        let doc_to_insert = get_build_document(build_version);
-        let all_jobs_document = get_all_jobs_document();
-        let update_all_jobs_document = false;
-        const os = doc['os'];
-        const component = doc['component'];
-        const name = doc['name'];
-        let sub_component;
-        if (typeof doc === undefined || doc.hasOwnProperty('subComponent')) {
-            sub_component = doc['subComponent'];
-        }
-        else {
-            sub_component = "";
-        }
-        if (!doc_to_insert.hasOwnProperty('os')) {
-            doc_to_insert['os'] = {};
-        }
-        if (!doc_to_insert['os'].hasOwnProperty(os)) {
-            doc_to_insert['os'][os] = {};
-        }
-        if (!doc_to_insert['os'][os].hasOwnProperty(component)){
-            doc_to_insert['os'][os][component] = {}
-        }
-        if (!doc_to_insert['os'][os][component].hasOwnProperty(name)){
-            doc_to_insert['os'][os][component][name] = []
-        }
-        if (!all_jobs_document.hasOwnProperty('server')) {
-            all_jobs_document['server'] = {};
-        }
-        if (!all_jobs_document['server'].hasOwnProperty(os)) {
-            all_jobs_document['server'][os] = {};
-        }
-        if (!all_jobs_document['server'][os].hasOwnProperty(component)) {
-            all_jobs_document['server'][os][component] = {};
-        }
-        //const implementedIn = get_implemented_in(component, sub_component);
-        const version = build_version.split('-')[0];
-        if (!(name in all_jobs_document['server'][os][component])) {
-            all_jobs_document['server'][os][component][name] = {
-                "totalCount" : doc['totalCount'],
-                "url" : doc['url'],
-                "priority" : doc['priority'],
-                "jobs_in" : [version]
-            };
-            update_all_jobs_document = true;
-        }
-        else {
-            if (all_jobs_document['server'][os][component][name]['jobs_in'].indexOf(version) == -1){
-                all_jobs_document['server'][os][component][name]['jobs_in'].push(version);
-              
-                all_jobs_document['server'][os][component][name]['jobs_in'] =
-                    all_jobs_document['server'][os][component][name]['jobs_in'].sort().filter(function(item, pos, ary){
-                    return !pos || item != ary[pos - 1];
-                })
-
-                update_all_jobs_document = true;
-                
-            }
-        }
-        var build_to_store = {
-            "build_id": doc['build_id'],
-            "claim": doc['claim'],
-            "totalCount": doc['totalCount'],
-            "result": doc['result'],
-            "duration": doc['duration'],
-            "url": doc['url'],
-            "priority": doc['priority'],
-            "failCount": doc['failCount'],
-            "color": (doc.hasOwnProperty('color'))? doc['color']:'',
-            "deleted": false,
-            "olderBuild": false,
-            "disabled": false
-        }
-        if (doc.hasOwnProperty("skipCount")) {
-            build_to_store["skipCount"] = doc["skipCount"]
-        }
-        if (doc["bugs"] !== undefined) {
-            build_to_store["bugs"] = doc["bugs"]
-        }
-        if (doc["triage"] !== undefined) {
-            build_to_store["triage"] = doc["triage"]
-        }
-        let store_build = true;
-        for (let job of doc_to_insert['os'][os][component][name]) {
-            if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
-                store_build = false;
-            }
-        }
-        if (!store_build){
-            if(!update_all_jobs_document) {
+    while (true) {
+        try {
+            if(doc === null){
                 return;
             }
-        }
-        else {
-            doc_to_insert['os'][os][component][name].push(build_to_store);
-            //Sort all the builds for the job and remove any duplicates from it.
-            doc_to_insert['os'][os][component][name] = doc_to_insert['os'][os][component][name].sort(function(a, b){
-                return b['build_id'] - a['build_id'];
-            }).filter(function(item, pos, ary){
-                return !pos || item.build_id != ary[pos - 1].build_id;
-            });
-            doc_to_insert['os'][os][component][name][0]['olderBuild'] = false;
-            for(var i = 1; i < doc_to_insert['os'][os][component][name].length; i++ ){
-                doc_to_insert['os'][os][component][name][i]['olderBuild'] = true;
+            const build_version = doc['build'];
+            const [doc_to_insert, doc_to_insert_meta] = get_build_document(build_version);
+            const [all_jobs_document, all_jobs_document_meta] = get_all_jobs_document();
+            let update_all_jobs_document = false;
+            const os = doc['os'];
+            const component = doc['component'];
+            const name = doc['name'];
+            let sub_component;
+            if (typeof doc === undefined || doc.hasOwnProperty('subComponent')) {
+                sub_component = doc['subComponent'];
             }
-            let counts = get_total_count(doc_to_insert);
-            const totalCount = counts['totalCount'];
-            const failCount = counts['failCount'];
-            log('totalCount', totalCount);
-            log('failCount', failCount);
-            doc_to_insert['totalCount'] = totalCount;
-            doc_to_insert['failCount'] = failCount;
-            const doc_id = build_version.concat("_server");
-            tgt[doc_id] = doc_to_insert;
-            for(let i=0; i < 5; i++){
-            let valid = validateData(doc, build_to_store);
-            if (valid) {
-                break;
+            else {
+                sub_component = "";
             }
-        }
-        }
-        if (update_all_jobs_document) {
-            tgt['existing_builds_server'] = all_jobs_document
-            for(let i=0; i < 1; i++){
-              let valid = validateExistingBuilds(doc,all_jobs_document["server"][os][component][name]);
-              if (valid) {
-                  break;
-              }
+            if (!doc_to_insert.hasOwnProperty('os')) {
+                doc_to_insert['os'] = {};
             }
+            if (!doc_to_insert['os'].hasOwnProperty(os)) {
+                doc_to_insert['os'][os] = {};
+            }
+            if (!doc_to_insert['os'][os].hasOwnProperty(component)){
+                doc_to_insert['os'][os][component] = {}
+            }
+            if (!doc_to_insert['os'][os][component].hasOwnProperty(name)){
+                doc_to_insert['os'][os][component][name] = []
+            }
+            if (!all_jobs_document.hasOwnProperty('server')) {
+                all_jobs_document['server'] = {};
+            }
+            if (!all_jobs_document['server'].hasOwnProperty(os)) {
+                all_jobs_document['server'][os] = {};
+            }
+            if (!all_jobs_document['server'][os].hasOwnProperty(component)) {
+                all_jobs_document['server'][os][component] = {};
+            }
+            //const implementedIn = get_implemented_in(component, sub_component);
+            const version = build_version.split('-')[0];
+            if (!(name in all_jobs_document['server'][os][component])) {
+                all_jobs_document['server'][os][component][name] = {
+                    "totalCount" : doc['totalCount'],
+                    "url" : doc['url'],
+                    "priority" : doc['priority'],
+                    "jobs_in" : [version]
+                };
+                update_all_jobs_document = true;
+            }
+            else {
+                if (all_jobs_document['server'][os][component][name]['jobs_in'].indexOf(version) == -1){
+                    all_jobs_document['server'][os][component][name]['jobs_in'].push(version);
+                  
+                    all_jobs_document['server'][os][component][name]['jobs_in'] =
+                        all_jobs_document['server'][os][component][name]['jobs_in'].sort().filter(function(item, pos, ary){
+                        return !pos || item != ary[pos - 1];
+                    })
+    
+                    update_all_jobs_document = true;
+                
+                }
+            }
+            var build_to_store = {
+                "build_id": doc['build_id'],
+                "claim": doc['claim'],
+                "totalCount": doc['totalCount'],
+                "result": doc['result'],
+                "duration": doc['duration'],
+                "url": doc['url'],
+                "priority": doc['priority'],
+                "failCount": doc['failCount'],
+                "color": (doc.hasOwnProperty('color'))? doc['color']:'',
+                "deleted": false,
+                "olderBuild": false,
+                "disabled": false
+            }
+            if (doc.hasOwnProperty("skipCount")) {
+                build_to_store["skipCount"] = doc["skipCount"]
+            }
+            if (doc["bugs"] !== undefined) {
+                build_to_store["bugs"] = doc["bugs"]
+            }
+            if (doc["triage"] !== undefined) {
+                build_to_store["triage"] = doc["triage"]
+            }
+            let store_build = true;
+            for (let job of doc_to_insert['os'][os][component][name]) {
+                if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
+                    store_build = false;
+                }
+            }
+            if (!store_build){
+                if(!update_all_jobs_document) {
+                    return;
+                }
+            }
+            else {
+                doc_to_insert['os'][os][component][name].push(build_to_store);
+                //Sort all the builds for the job and remove any duplicates from it.
+                doc_to_insert['os'][os][component][name] = doc_to_insert['os'][os][component][name].sort(function(a, b){
+                    return b['build_id'] - a['build_id'];
+                }).filter(function(item, pos, ary){
+                    return !pos || item.build_id != ary[pos - 1].build_id;
+                });
+                doc_to_insert['os'][os][component][name][0]['olderBuild'] = false;
+                for(var i = 1; i < doc_to_insert['os'][os][component][name].length; i++ ){
+                    doc_to_insert['os'][os][component][name][i]['olderBuild'] = true;
+                }
+                let counts = get_total_count(doc_to_insert);
+                const totalCount = counts['totalCount'];
+                const failCount = counts['failCount'];
+                log('totalCount', totalCount);
+                log('failCount', failCount);
+                doc_to_insert['totalCount'] = totalCount;
+                doc_to_insert['failCount'] = failCount;
+                if (!replaceOrInsert(doc_to_insert_meta, doc_to_insert)) {
+                    continue;
+                }
+                for(let i=0; i < 5; i++){
+                    let valid = validateData(doc, build_to_store);
+                    if (valid) {
+                        break;
+                    }
+                }
+            }
+            if (update_all_jobs_document) {
+                if (!replaceOrInsert(all_jobs_document_meta, all_jobs_document)) {
+                    continue;
+                }
+                for(let i=0; i < 1; i++){
+                    let valid = validateExistingBuilds(doc,all_jobs_document["server"][os][component][name]);
+                    if (valid) {
+                        break;
+                    }
+                }
+            }
+            break;
+        } catch (e) {
+            log("exception", e);
         }
-    } catch (e) {
-        log("exception", e);
     }
 
 }
 function OnDelete(meta) {
 }
 
+function replaceOrInsert(meta, doc) {
+    if (meta.cas !== undefined) {
+        const res = couchbase.replace(tgt, meta, doc);
+        return res.success;
+    } else {
+        const res = couchbase.insert(tgt, meta, doc);
+        return res.success;
+    }
+}
+
 function get_build_document(build_version) {
-    let build_to_store;
     const doc_id = build_version.concat("_server");
-    var new_build_to_store = {
-        "build": build_version,
-        "totalCount": 0,
-        "failCount": 0,
-        "type": 'server',
-        "os": {}
-    };
-    try {
-        build_to_store = tgt[doc_id];
-    } catch (e) {
-        build_to_store = new_build_to_store;
+    const res = couchbase.get(tgt, { id: doc_id});
+    if (res.success) {
+        return [res.doc, res.meta];
+    } else {
+        const new_build_to_store = {
+            "build": build_version,
+            "totalCount": 0,
+            "failCount": 0,
+            "type": 'server',
+            "os": {}
+        };
+        return [new_build_to_store, { id: doc_id }];
     }
-    if (build_to_store === undefined){
-        build_to_store = new_build_to_store;
-    }
-    return build_to_store;
 }
 
 function get_all_jobs_document(){
-    let all_jobs_document;
-    try {
-        all_jobs_document = tgt['existing_builds_server'];
-    } catch (e) {
-        all_jobs_document = {};
+    const res = couchbase.get(tgt, { id: "existing_builds_server"});
+    if (res.success) {
+        return [res.doc, res.meta];
+    } else {
+        return [{}, { id: "existing_builds_server" }];
     }
-    if (all_jobs_document === undefined){
-        all_jobs_document = {};
-    }
-    return all_jobs_document;
 }
 
 
@@ -207,7 +214,7 @@ function validateExistingBuilds(doc,build_to_store){
     try{
       const build_version = doc["build"]
       const build_id = doc["build_id"]
-      let existing_build_doc = get_all_jobs_document()
+      const [existing_build_doc, existing_build_doc_meta] = get_all_jobs_document()
       
       const os = doc['os'];
       const component = doc['component'];
@@ -223,7 +230,8 @@ function validateExistingBuilds(doc,build_to_store){
       };
 
       function upsertDoc(doc_to_upsert){
-        tgt["existing_builds_server"] = doc_to_upsert;
+        log("Invalid data found in validateExistingBuilds")
+        replaceOrInsert(existing_build_doc_meta, doc_to_upsert)
       }
 
      
@@ -273,19 +281,19 @@ function validateData(doc, build_to_store) {
     try {
         const build_version = doc['build'];
         const build_id = doc['build_id'];
-        let doc_to_insert = get_build_document(build_version);
+        const [doc_to_insert, doc_to_insert_meta] = get_build_document(build_version);
         let valid_data = false;
         const os = doc['os'];
         const component = doc['component'];
         const name = doc['name'];
         function upsertDocument(doc_to_upsert) {
+            log("Invalid data found in validateData")
             let counts = get_total_count(doc_to_insert);
             const totalCount = counts['totalCount'];
             const failCount = counts['failCount'];
             doc_to_upsert['totalCount'] = totalCount;
             doc_to_upsert['failCount'] = failCount;
-            const doc_id = build_version.concat("_server");
-            tgt[doc_id] = doc_to_upsert;
+            replaceOrInsert(doc_to_insert_meta, doc_to_insert)
         }
         if (doc_to_insert.hasOwnProperty('os')) {
             if (doc_to_insert['os'].hasOwnProperty(os)) {
