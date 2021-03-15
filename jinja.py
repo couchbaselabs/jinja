@@ -820,6 +820,8 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                     if not doc.get("build"):
                         continue
 
+                    doc["name"] = doc["name"] + "_" + doc["server_version"]
+
                     doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                     update_skip_count(greenboard_bucket, view, doc)
 
