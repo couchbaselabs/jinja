@@ -108,6 +108,14 @@ def getAction(actions, key, value=None):
 
     return obj
 
+def build_finished(res):
+    if res is None or "result" not in res or "building" not in res:
+        return False
+
+    if res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"] or res["building"]:
+        return False
+    
+    return True
 
 def getBuildAndPriority(params, build_param_names):
     build = None
@@ -444,7 +452,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                     for _ in range(2):
                         res = getJS(url + str(bid), {"depth": 0})
-                        if res is None or "result" not in res or res["result"] not in ["SUCCESS", "UNSTABLE", "FAILURE", "ABORTED"]:
+                        if not build_finished(res):
                             break
                         # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
                         # e.g. result set to success, test result processed, result updated, duration updated.
@@ -744,9 +752,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
                     for _ in range(2):
                         res = getJS(url + str(bid), {"depth": 0})
-                        if res is None or "result" not in res or res[
-                            "result"] not in ["SUCCESS", "UNSTABLE", "FAILURE",
-                                              "ABORTED"]:
+                        if not build_finished(res):
                             break
                         # retry after 10 seconds if jenkins race condition
                         # where result and duration have not been updated to
