@@ -77,6 +77,15 @@ function OnUpdate(doc,meta) {
             "olderBuild": false,
             "disabled": false
         }
+        if (doc.hasOwnProperty("skipCount")) {
+            build_to_store["skipCount"] = doc["skipCount"]
+        }
+        if (doc["bugs"] !== undefined) {
+            build_to_store["bugs"] = doc["bugs"]
+        }
+        if (doc["triage"] !== undefined) {
+            build_to_store["triage"] = doc["triage"]
+        }
         let store_build = true;
         for (let job of doc_to_insert['os'][os][component][name]) {
             if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
