@@ -1088,6 +1088,11 @@ def pollTest(view, already_scraped):
             continue
 
         for job in j["jobs"]:
+
+            if is_excluded(view, job):
+                print("skipping {} (excluded)".format(job["name"]))
+                continue
+
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:
@@ -1133,6 +1138,13 @@ def pollTest(view, already_scraped):
     pool.join()
 
 
+def is_excluded(view, job):
+    if "exclude" in view:
+        for name in view["exclude"]:
+            if re.search(name, job["name"]) is not None:
+                return True
+    return False
+
 
 def polloperator(view, already_scraped):
     tJobs = []
@@ -1143,6 +1155,11 @@ def polloperator(view, already_scraped):
             continue
 
         for job in j["jobs"]:
+
+            if is_excluded(view, job):
+                print("skipping {} (excluded)".format(job["name"]))
+                continue
+
             doc = {}
             doc["name"] = job["name"]
             if job["name"] in JOBS:

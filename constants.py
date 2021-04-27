@@ -118,7 +118,8 @@ SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qe-jenkins.sc.couc
                "features": SERVER_FEATURES,
                "build_param_name": ["version_number", "cluster_version",
                                     "build", "COUCHBASE_SERVER_VERSION"],
-               "bucket": "server"}
+               "bucket": "server",
+               "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]}
 
 SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
            "platforms": SG_PLATFORMS,
