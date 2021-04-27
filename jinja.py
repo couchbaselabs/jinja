@@ -69,7 +69,7 @@ def getJS(url, params=None, retry=5, append_api_json=True):
 def getConsoleLog(url):
     res = None
     try:
-        res =  requests.get("%s/%s" % (url, "consoleText"))
+        res =  requests.get("%s/%s" % (url, "consoleText"), timeout=15)
         if res.status_code == 200:
             return res.content
     except ex:
