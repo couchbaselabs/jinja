@@ -178,6 +178,31 @@ def format_stack_trace(raw_stack_trace, character_limit=1000):
     stack = re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last):  ")
     return (stack[:character_limit] + '...') if len(stack) > character_limit else stack
 
+def get_servers_from_log(job_url):
+    ips = set()
+    try:
+        auth = get_auth(job_url)
+        timeout = 5
+        start_download_time = time.time()
+        for line in requests.get(job_url + '/consoleText', timeout=timeout, stream=True, auth=auth).iter_lines():
+            if time.time() > start_download_time + timeout:
+                raise Exception("download timeout")
+            # install.py
+            if "thread installer-thread-" in line:
+                try:
+                    ips.add(line.replace("thread installer-thread-", "").replace(" finished", "").strip())
+                except Exception:
+                    pass
+            # new_install.py
+            if "INSTALL COMPLETED ON" in line or "INSTALL NOT STARTED ON" in line or "INSTALL FAILED ON" in line:
+                try:
+                    ips.add(line.split(" ")[-1].strip())
+                except Exception:
+                    pass
+    except Exception:
+        print("error downloading console ({})".format(job_url))
+    return list(ips)
+
 def get_claim_from_log(job_url):
     reasons = set()
     try:
@@ -379,6 +404,16 @@ def get_manual_triage_and_bugs(triage_history_bucket, bucket, doc):
 
     return triage, bugs
 
+def get_servers_from_params(params):
+    servers = getAction(params, "name", "servers")
+    if servers is None:
+        return []
+    else:
+        return [server.strip("\"") for server in servers.split(",")]
+
+def get_servers(params, job_url):
+    return get_servers_from_params(params) or get_servers_from_log(job_url)
+
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
         jobDoc, view, already_scraped = input
@@ -536,6 +571,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                             doc["component"] = _comp
                         if not doc.get("os") or not doc.get("component"):
                             continue
+
+                    doc["servers"] = get_servers(params, url + str(bid))
 
                     if doc["component"] == "P2P":
                         is_cblite_p2p = True
@@ -827,6 +864,8 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                         continue
 
                     doc["name"] = doc["name"] + "_" + doc["server_version"]
+
+                    doc["servers"] = get_servers(params, url + str(bid))
 
                     doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                     update_skip_count(greenboard_bucket, view, doc)
