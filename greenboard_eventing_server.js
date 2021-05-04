@@ -86,6 +86,9 @@ function OnUpdate(doc,meta) {
             if (doc["triage"] !== undefined) {
                 build_to_store["triage"] = doc["triage"]
             }
+            if (doc["servers"] !== undefined) {
+                build_to_store["servers"] = doc["servers"]
+            }
             let store_build = true;
             for (let job of doc_to_insert['os'][os][component][name]) {
                 if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
