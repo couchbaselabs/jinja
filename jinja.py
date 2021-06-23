@@ -978,6 +978,7 @@ def storeBuild(run, name, view):
     should_analyse_logs = result != "SUCCESS"
     should_analyse_report = totalCount > 0 and result != "SUCCESS"
     claim = getClaimReason(actions, should_analyse_logs, should_analyse_report, run["url"] + job["id"])
+    servers = get_servers(params, run["url"] + job["id"])
 
     # lookup pass count fail count version
     doc = {
@@ -993,7 +994,8 @@ def storeBuild(run, name, view):
         "duration": duration,
         "priority": "P0",
         "os": os,
-        "build": build
+        "build": build,
+        "servers": servers
     }
 
     update_skip_count(greenboard_bucket, view, doc)
