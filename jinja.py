@@ -23,6 +23,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 JOBS = {}
 HOST = '172.23.98.63'
+DEFAULT_BUCKET_STORAGE = "COUCHSTORE"
 
 config = ConfigParser.ConfigParser()
 config.read("credentials.ini")
@@ -371,8 +372,9 @@ def purgeDisabled(job, bucket):
 
 def get_expected_total_count(greenboard_bucket, bucket, doc):
     expected_total_count = None
+    name = doc.get("displayName") or doc["name"]
     try:
-        expected_total_count = int(greenboard_bucket.lookup_in("existing_builds_"+bucket, SD.get(bucket+"."+doc["os"]+"."+doc["component"]+"."+doc["name"]+".totalCount"))[0])
+        expected_total_count = int(greenboard_bucket.lookup_in("existing_builds_"+bucket, SD.get(bucket+"."+doc["os"]+"."+doc["component"]+"."+name+".totalCount"))[0])
     except Exception:
         pass
     return expected_total_count
@@ -413,6 +415,20 @@ def get_servers_from_params(params):
 
 def get_servers(params, job_url):
     return get_servers_from_params(params) or get_servers_from_log(job_url)
+
+
+def get_bucket_storage(params):
+    """
+    Get bucket_storage type from the parameters parameter
+    """
+    # if present, bucket_storage will be in a parameter called parameters
+    parameters = getAction(params, "name", "parameters")
+    if parameters is None:
+        return DEFAULT_BUCKET_STORAGE
+    for parameter in parameters.split(","):
+        if parameter.startswith("bucket_storage="):
+            return parameter.split("=")[1].upper()
+    return DEFAULT_BUCKET_STORAGE
 
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
@@ -682,6 +698,17 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                 error_file.writelines(doc.__str__())
 
                     else:
+
+                        if bucket == "server":
+                            # try and get the bucket type (e.g. couchstore/magma)
+                            bucket_storage = get_bucket_storage(params)
+                            doc["variants"] = {
+                                "bucket_storage": bucket_storage,
+                            }
+                            doc["displayName"] = doc["name"]
+                            for key, value in doc["variants"].iteritems():
+                                doc["name"] += key + "=" + value
+
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
                         doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket, view["bucket"], doc)
@@ -1099,9 +1126,6 @@ def getOsComponent(name, view):
         if tag in docname:
             _comp = _c
             break
-
-    if _comp == "COUCHSTORE":
-        _os = "MAGMA"
 
     #    if _comp is None:
     #        print "%s: job name has unrecognized component: %s" %  (view["bucket"], name)

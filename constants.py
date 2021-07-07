@@ -4,7 +4,7 @@ UBER_USER = os.environ.get('UBER_USER') or ""
 UBER_PASS = os.environ.get('UBER_PASS') or ""
 
 ## --- PLATFORMS --- ##
-SERVER_PLATFORMS = ["MAGMA","UBUNTU", "CENTOS", "DEBIAN", "WIN",
+SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN",
                      "MAC", "SUSE",
                     "OEL", "DOCKER","RHEL"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]

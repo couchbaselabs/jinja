@@ -10,7 +10,8 @@ function OnUpdate(doc,meta) {
             let update_all_jobs_document = false;
             const os = doc['os'];
             const component = doc['component'];
-            const name = doc['name'];
+            let name = doc['name'];
+            const displayName = doc["displayName"] || name;
             let sub_component;
             if (typeof doc === undefined || doc.hasOwnProperty('subComponent')) {
                 sub_component = doc['subComponent'];
@@ -27,9 +28,6 @@ function OnUpdate(doc,meta) {
             if (!doc_to_insert['os'][os].hasOwnProperty(component)){
                 doc_to_insert['os'][os][component] = {}
             }
-            if (!doc_to_insert['os'][os][component].hasOwnProperty(name)){
-                doc_to_insert['os'][os][component][name] = []
-            }
             if (!all_jobs_document.hasOwnProperty('server')) {
                 all_jobs_document['server'] = {};
             }
@@ -41,8 +39,8 @@ function OnUpdate(doc,meta) {
             }
             //const implementedIn = get_implemented_in(component, sub_component);
             const version = build_version.split('-')[0];
-            if (!(name in all_jobs_document['server'][os][component])) {
-                all_jobs_document['server'][os][component][name] = {
+            if (!(displayName in all_jobs_document['server'][os][component])) {
+                all_jobs_document['server'][os][component][displayName] = {
                     "totalCount" : doc['totalCount'],
                     "url" : doc['url'],
                     "priority" : doc['priority'],
@@ -51,11 +49,11 @@ function OnUpdate(doc,meta) {
                 update_all_jobs_document = true;
             }
             else {
-                if (all_jobs_document['server'][os][component][name]['jobs_in'].indexOf(version) == -1){
-                    all_jobs_document['server'][os][component][name]['jobs_in'].push(version);
+                if (all_jobs_document['server'][os][component][displayName]['jobs_in'].indexOf(version) == -1){
+                    all_jobs_document['server'][os][component][displayName]['jobs_in'].push(version);
                   
-                    all_jobs_document['server'][os][component][name]['jobs_in'] =
-                        all_jobs_document['server'][os][component][name]['jobs_in'].sort().filter(function(item, pos, ary){
+                    all_jobs_document['server'][os][component][displayName]['jobs_in'] =
+                        all_jobs_document['server'][os][component][displayName]['jobs_in'].sort().filter(function(item, pos, ary){
                         return !pos || item != ary[pos - 1];
                     })
     
@@ -75,7 +73,8 @@ function OnUpdate(doc,meta) {
                 "color": (doc.hasOwnProperty('color'))? doc['color']:'',
                 "deleted": false,
                 "olderBuild": false,
-                "disabled": false
+                "disabled": false,
+                "displayName": displayName
             }
             if (doc.hasOwnProperty("skipCount")) {
                 build_to_store["skipCount"] = doc["skipCount"]
@@ -89,12 +88,50 @@ function OnUpdate(doc,meta) {
             if (doc["servers"] !== undefined) {
                 build_to_store["servers"] = doc["servers"]
             }
+            if (doc["variants"] !== undefined) {
+                build_to_store["variants"] = doc["variants"]
+            }
             let store_build = true;
-            for (let job of doc_to_insert['os'][os][component][name]) {
-                if(job['build_id'] === build_to_store['build_id'] && job['url'] === build_to_store['url'] && job["result"] === build_to_store["result"] && job["duration"] === build_to_store["duration"] && job["totalCount"] === build_to_store["totalCount"] && job["failCount"] === build_to_store["failCount"]) {
-                    store_build = false;
+            for (const [jobName, job] of Object.entries(doc_to_insert['os'][os][component])) {
+                if (!store_build) {
+                    break;
+                }
+                for (const run of job) {
+                    if ((run["displayName"] || jobName) !== build_to_store["displayName"]) {
+                        continue
+                    }
+
+                    // don't store the same build twice
+                    if (run["build_id"] === build_to_store["build_id"]) {
+                        store_build = false;
+                        break;
+                    }
+
+                    const runVariants = run["variants"] || {}
+                    const buildToStoreVariants = build_to_store["variants"] || {}
+
+                    // all variants in run are the same in build_to_store
+                    let existingVariantsSame = true;
+                    for (const [variantName, variantValue] of Object.entries(runVariants)) {
+                        if (buildToStoreVariants[variantName] !== variantValue) {
+                            existingVariantsSame = false;
+                            break;
+                        }
+                    }
+                    if (!existingVariantsSame) {
+                        continue
+                    }
+
+                    // same display name but different variants length so combine
+                    name = jobName
                 }
             }
+
+            // name may have changed so create empty run list if job name doesn't exist
+            if (!doc_to_insert['os'][os][component].hasOwnProperty(name)){
+                doc_to_insert['os'][os][component][name] = []
+            }
+
             if (!store_build){
                 if(!update_all_jobs_document) {
                     return;
@@ -122,22 +159,10 @@ function OnUpdate(doc,meta) {
                 if (!replaceOrInsert(doc_to_insert_meta, doc_to_insert)) {
                     continue;
                 }
-                for(let i=0; i < 5; i++){
-                    let valid = validateData(doc, build_to_store);
-                    if (valid) {
-                        break;
-                    }
-                }
             }
             if (update_all_jobs_document) {
                 if (!replaceOrInsert(all_jobs_document_meta, all_jobs_document)) {
                     continue;
-                }
-                for(let i=0; i < 1; i++){
-                    let valid = validateExistingBuilds(doc,all_jobs_document["server"][os][component][name]);
-                    if (valid) {
-                        break;
-                    }
                 }
             }
             break;
@@ -211,153 +236,4 @@ function get_total_count(doc_to_insert){
         log('Exception in get_total_count', e);
     }
     return {"totalCount": totalCount, "failCount": failCount};
-}
-
-function validateExistingBuilds(doc,build_to_store){
-    try{
-      const build_version = doc["build"]
-      const build_id = doc["build_id"]
-      const [existing_build_doc, existing_build_doc_meta] = get_all_jobs_document()
-      
-      const os = doc['os'];
-      const component = doc['component'];
-      const name = doc['name'];
-      const version = doc['build'].split('-')[0]
-      var valid_data = false
-
-      const valid_doc = {
-        "totalCount" : doc['totalCount'],
-        "url" : doc['url'],
-        "priority" : doc['priority'],
-        "jobs_in" : [version]
-      };
-
-      function upsertDoc(doc_to_upsert){
-        log("Invalid data found in validateExistingBuilds")
-        replaceOrInsert(existing_build_doc_meta, doc_to_upsert)
-      }
-
-     
-      if(existing_build_doc["server"].hasOwnProperty(os)){
-        if(existing_build_doc["server"][os].hasOwnProperty(component)){
-          if(existing_build_doc["server"][os][component].hasOwnProperty(name)){
-            let existing_job = existing_build_doc["server"][os][component][name]
-            if(existing_job["totalCount"] == build_to_store["totalCount"] &&
-               existing_job["url"] == build_to_store["url"] &&
-               existing_job["priority"] == build_to_store["priority"] && 
-               JSON.stringify(existing_job["jobs_in"].sort()) == JSON.stringify(build_to_store["jobs_in"].sort())){
-                  valid_data = true
-            }
-            else{
-              valid_data = false
-              existing_build_doc["server"][os][component][name] = build_to_store
-              upsertDoc(existing_build_doc)
-            }
-          }
-          else{
-            existing_build_doc["server"][os][component][name] = build_to_store
-            upsertDoc(existing_build_doc)
-          }
-        }
-        else{
-          existing_build_doc["server"][os][component] = {}
-          existing_build_doc["server"][os][component][name] = build_to_store
-          upsertDoc(existing_build_doc)
-        }
-      }
-      else{
-        existing_build_doc["server"][os] = {}
-        existing_build_doc["server"][os][component] = {}
-        existing_build_doc["server"][os][component][name] = build_to_store
-        upsertDoc(existing_build_doc)
-      }
-      return valid_data
-    }
-
-    catch(e){
-      log("Exception",e)
-      return false
-    }
-}
-
-function validateData(doc, build_to_store) {
-    try {
-        const build_version = doc['build'];
-        const build_id = doc['build_id'];
-        const [doc_to_insert, doc_to_insert_meta] = get_build_document(build_version);
-        let valid_data = false;
-        const os = doc['os'];
-        const component = doc['component'];
-        const name = doc['name'];
-        function upsertDocument(doc_to_upsert) {
-            log("Invalid data found in validateData")
-            let counts = get_total_count(doc_to_insert);
-            const totalCount = counts['totalCount'];
-            const failCount = counts['failCount'];
-            doc_to_upsert['totalCount'] = totalCount;
-            doc_to_upsert['failCount'] = failCount;
-            replaceOrInsert(doc_to_insert_meta, doc_to_insert)
-        }
-        if (doc_to_insert.hasOwnProperty('os')) {
-            if (doc_to_insert['os'].hasOwnProperty(os)) {
-                if (doc_to_insert['os'][os].hasOwnProperty(component)) {
-                    if (doc_to_insert['os'][os][component].hasOwnProperty(name)) {
-                        let jobs = doc_to_insert['os'][os][component][name];
-                        let job_to_check = jobs.find(function (job) {
-                            return job['build_id'] === doc['build_id'];
-                        });
-                        if (job_to_check !== undefined) {
-                            if (job_to_check['totalCount'] === doc['totalCount'] &&
-                                job_to_check['result'] === doc['result'] &&
-                                job_to_check['duration'] === doc['duration'] &&
-                                job_to_check['url'] === doc['url'] &&
-                                job_to_check['priority'] === doc['priority'] &&
-                                job_to_check['failCount'] == doc['failCount']) {
-                                valid_data = true;
-                            } else {
-                                let index_of_job = jobs.findIndex(function (job) {
-                                    return job['build_id'] === doc['build_id'];
-                                });
-                                let older_build = jobs[index_of_job];
-                                let new_build_to_store = build_to_store;
-                                new_build_to_store['olderBuild'] = older_build['olderBuild'];
-                                new_build_to_store['deleted'] = older_build['deleted'];
-                                new_build_to_store['disabled'] = older_build['disabled'];
-                                doc_to_insert['os'][os][component][name][index_of_job] = new_build_to_store;
-                                upsertDocument(doc_to_insert);
-                                valid_data = false;
-                            }
-                        }
-                    }
-                    else {
-                        doc_to_insert['os'][os][component][name] = [build_to_store];
-                        upsertDocument(doc_to_insert);
-                    }
-                }
-                else {
-                    doc_to_insert['os'][os][component] = {};
-                    doc_to_insert['os'][os][component][name] = [build_to_store];
-                    upsertDocument(doc_to_insert);
-                }
-            }
-            else {
-                doc_to_insert['os'][os] = {}
-                doc_to_insert['os'][os][component] = {};
-                doc_to_insert['os'][os][component][name] = [build_to_store];
-                upsertDocument(doc_to_insert);
-            }
-        }
-        else {
-            doc_to_insert['os'] = {};
-            doc_to_insert['os'][os] = {};
-            doc_to_insert['os'][os][component] = {};
-            doc_to_insert['os'][os][component][name] = [build_to_store];
-            upsertDocument(doc_to_insert);
-        }
-        return valid_data;
-    }
-    catch (e) {
-        log("exception", e);
-        return false;
-    }
 }
