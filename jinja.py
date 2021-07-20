@@ -24,6 +24,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 JOBS = {}
 HOST = '172.23.98.63'
 DEFAULT_BUCKET_STORAGE = "COUCHSTORE"
+DEFAULT_GSI_TYPE = "PLASMA"
 
 config = ConfigParser.ConfigParser()
 config.read("credentials.ini")
@@ -417,18 +418,50 @@ def get_servers(params, job_url):
     return get_servers_from_params(params) or get_servers_from_log(job_url)
 
 
-def get_bucket_storage(params):
+def get_variant(name, params):
     """
-    Get bucket_storage type from the parameters parameter
+    Get a variant with the specified name from the parameters parameter
     """
-    # if present, bucket_storage will be in a parameter called parameters
     parameters = getAction(params, "name", "parameters")
     if parameters is None:
-        return DEFAULT_BUCKET_STORAGE
+        return None
     for parameter in parameters.split(","):
-        if parameter.startswith("bucket_storage="):
+        if parameter.startswith(name):
             return parameter.split("=")[1].upper()
-    return DEFAULT_BUCKET_STORAGE
+    return None
+
+
+def get_variants(params, component):
+    """
+    Get the variants from the params, or defaults where applicable
+    """
+    variants = {}
+
+    # Bucket storage applies to all jobs
+    variants["bucket_storage"] = get_variant("bucket_storage", params) or DEFAULT_BUCKET_STORAGE
+
+    # GSI type only applies to jobs that use GSI
+    gsi_type = get_variant("gsi_type", params)
+    # Only set default if not set and GSI component
+    if gsi_type is None:
+        if component in ["2I_MOI", "2I_REBALANCE", "PLASMA"]:
+            gsi_type = DEFAULT_GSI_TYPE
+        else:
+            gsi_type = "UNDEFINED"
+    variants["GSI_type"] = gsi_type
+
+    return variants
+
+
+def add_variants_to_name(doc):
+    """
+    Add the variants to the name of the job. 
+    Store the original name in displayName to show on greenboard
+    """
+    doc["displayName"] = doc["name"]
+    for key, value in doc["variants"].iteritems():
+        doc["name"] += key + "=" + value
+
 
 def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
@@ -700,14 +733,9 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     else:
 
                         if bucket == "server":
-                            # try and get the bucket type (e.g. couchstore/magma)
-                            bucket_storage = get_bucket_storage(params)
-                            doc["variants"] = {
-                                "bucket_storage": bucket_storage,
-                            }
-                            doc["displayName"] = doc["name"]
-                            for key, value in doc["variants"].iteritems():
-                                doc["name"] += key + "=" + value
+                            # get any test variants (e.g. bucket storage)
+                            doc["variants"] = get_variants(params, doc["component"])
+                            add_variants_to_name(doc)
 
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
@@ -1006,6 +1034,7 @@ def storeBuild(run, name, view):
     should_analyse_report = totalCount > 0 and result != "SUCCESS"
     claim = getClaimReason(actions, should_analyse_logs, should_analyse_report, run["url"] + job["id"])
     servers = get_servers(params, run["url"] + job["id"])
+    
 
     # lookup pass count fail count version
     doc = {
@@ -1026,6 +1055,9 @@ def storeBuild(run, name, view):
     }
 
     update_skip_count(greenboard_bucket, view, doc)
+
+    doc["variants"] = get_variants(params, comp)
+    add_variants_to_name(doc)
 
     key = "%s-%s" % (doc["name"], doc["build_id"])
     print key + "," + build
