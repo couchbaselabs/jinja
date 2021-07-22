@@ -91,6 +91,9 @@ function OnUpdate(doc,meta) {
             if (doc["variants"] !== undefined) {
                 build_to_store["variants"] = doc["variants"]
             }
+            if (doc["timestamp"] !== undefined) {
+                build_to_store["timestamp"] = doc["timestamp"]
+            }
             let store_build = true;
             for (const [jobName, job] of Object.entries(doc_to_insert['os'][os][component])) {
                 if (!store_build) {

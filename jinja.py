@@ -552,6 +552,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                     doc["result"] = res["result"]
                     doc["duration"] = res["duration"]
+                    doc["timestamp"] = res["timestamp"]
 
                     actions = res["actions"]
                     params = getAction(actions, "parameters")
@@ -864,6 +865,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
 
                     doc["result"] = res["result"]
                     doc["duration"] = res["duration"]
+                    doc["timestamp"] = res["timestamp"]
 
                     actions = res["actions"]
                     params = getAction(actions, "parameters")
@@ -1051,7 +1053,8 @@ def storeBuild(run, name, view):
         "priority": "P0",
         "os": os,
         "build": build,
-        "servers": servers
+        "servers": servers,
+        "timestamp": job["timestamp"]
     }
 
     update_skip_count(greenboard_bucket, view, doc)
