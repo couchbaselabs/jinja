@@ -184,6 +184,23 @@ CBLITE_DOTNET_VIEW = {
     "bucket": "cblite"
 }
 
+CBLITE_CLIB_VIEW = {
+    "urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
+    "platforms": ["CLIB"],
+    "features": LITE_FEATURES,
+    "build_param_name": ["LITE_NET_VERSION", "LITE_CLIB_VERSION",
+                         "LITE_ANDROID_VERSION", "LITE_IOS_VERSION"],
+    "additional_fields": {
+        "secondary_os": [["ANDROID", "ANDROID"], ["IOS", "IOS"],
+                         ["WINDOWS", "WINDOWS"], ["WIN", "WINDOWS"],
+                         ["DEBIAN", "DEBIAN9"], ["UBUNTU", "UBUNTU"],
+                         ["Rasbian2", "Rasbian2"], ["Rasbian3", "Rasbian3"],
+                         ["MACOS", "MACOS"],
+                         ["SANITY", "Common"], ["UPGRADE", "Common"]],
+    },
+    "bucket": "cblite"
+}
+
 
 BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
@@ -197,9 +214,9 @@ OPERATOR_VIEW = {"urls": ["http://qa.sc.couchbase.com/view/Cloud"],
                  "bucket": "operator"
                  }
 
-VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_DOTNET_VIEW,
-         CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW,
-         OPERATOR_VIEW]
+VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_CLIB_VIEW,
+         CBLITE_DOTNET_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW,
+         CBLITE_IOS_VIEW, OPERATOR_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
