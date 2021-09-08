@@ -113,7 +113,7 @@ SDK_FEATURES = [
 BUILD_FEATURES = ["SANITY-BUILD_SANITY", "UNIX-UNIT", "UNIT-UNIT"]
 
 ## ---  VIEWS --- ##
-SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qe-jenkins.sc.couchbase.com",
+SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com",
                         "http://qa.sc.couchbase.com/view/Cloud", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/server-build-test-java/", "http://sdkbuilds.sc.couchbase.com/view/.NET/job/server-build-test-net/", "http://sdkbuilds.sc.couchbase.com/view/GO/job/server-build-test-go/", "http://sdkbuilds.sc.couchbase.com/job/Fast-failover-Java/","http://sdkbuilds.sc.couchbase.com/job/fastfailover-lcb/", "http://sdkbuilds.sc.couchbase.com/view/JAVA/job/feature-java", "http://qa.sc.couchbase.com/view/OS%20Certification/", "http://uberjenkins.sc.couchbase.com:8080/", "http://sdkbuilds.sc.couchbase.com/view/IPV6", "http://sdk.jenkins.couchbase.com/view/Situational/"],
                "platforms": SERVER_PLATFORMS,
                "features": SERVER_FEATURES,
@@ -121,6 +121,17 @@ SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com", "http://qe-jenkins.sc.couc
                                     "build", "COUCHBASE_SERVER_VERSION"],
                "bucket": "server",
                "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]}
+
+SERVER_VIEW_2 = {"urls" : ["http://qe-jenkins.sc.couchbase.com"],
+                 "platforms": SERVER_PLATFORMS,
+                 "features": SERVER_FEATURES,
+                 "build_param_name": ["version_number",
+                                      "cluster_version",
+                                      "build",
+                                      "COUCHBASE_SERVER_VERSION"],
+                 "bucket": "server",
+                 "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]
+                 }
 
 SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
            "platforms": SG_PLATFORMS,
@@ -214,7 +225,8 @@ OPERATOR_VIEW = {"urls": ["http://qa.sc.couchbase.com/view/Cloud"],
                  "bucket": "operator"
                  }
 
-VIEWS = [SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_CLIB_VIEW,
+VIEWS = [SERVER_VIEW, SERVER_VIEW_2, BUILD_VIEW, SG_VIEW,
+         CBLITE_CLIB_VIEW,
          CBLITE_DOTNET_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW,
          CBLITE_IOS_VIEW, OPERATOR_VIEW]
 
