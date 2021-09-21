@@ -359,7 +359,7 @@ def purgeDisabled(job, bucket):
         return
 
     high_bid = bids[0]
-    for bid in xrange(high_bid):
+    for bid in range(high_bid):
         # reconstruct doc id
         bid = bid + 1
         oldKey = "%s-%s" % (name, bid)
