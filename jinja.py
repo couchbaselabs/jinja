@@ -24,6 +24,8 @@ JOBS = {}
 HOST = '172.23.98.63'
 DEFAULT_BUCKET_STORAGE = "COUCHSTORE"
 DEFAULT_GSI_TYPE = "PLASMA"
+DEFAULT_ARCHITECTURE = "x86_64"
+DEFAULT_SERVER_TYPE = "VM"
 
 config = configparser.ConfigParser()
 config.read("credentials.ini")
@@ -612,6 +614,10 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if not componentParam or not subComponentParam or not osParam:
                             continue
 
+                        architecture = getAction(params, "name", "arch")
+                        if architecture and architecture != DEFAULT_ARCHITECTURE:
+                            osParam += "-" + architecture
+
                         pseudoName = str(osParam + "-" + componentParam + "_" + subComponentParam)
                         doc["name"] = pseudoName
                         nameOrig = pseudoName
@@ -619,6 +625,10 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if _os and _comp:
                             doc["os"] = _os
                             doc["component"] = _comp
+                        # replace os with server type if it exists and is not the default
+                        server_type = getAction(params, "name", "server_type")
+                        if server_type and server_type != DEFAULT_SERVER_TYPE:
+                            doc["os"] = server_type
                         if not doc.get("os") or not doc.get("component"):
                             continue
 
@@ -1027,6 +1037,10 @@ def storeBuild(run, name, view):
     os, comp = getOsComponent(name, view)
     if not os or not comp:
         return
+
+    # build sanity has no server type parameter so infer from os
+    if name == "build_sanity_matrix" and os == "AMZN":
+        os = "AWS"
 
     duration = int(job["duration"]) or 0
 

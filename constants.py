@@ -6,7 +6,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN",
                     "MAC", "SUSE",
-                    "OEL", "DOCKER", "RHEL", "AMZN2-ARM"]
+                    "OEL", "DOCKER", "RHEL", "AMZN2"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
 SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
