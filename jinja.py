@@ -1024,6 +1024,7 @@ def storeBuild(run, name, view):
 
     build = version + "-" + build.zfill(4)
 
+    old_name = name
     # Fix CBQE-6406
     if name == "build_sanity_matrix":
         node_type = job["fullDisplayName"].split()[2].split(",")[1]
@@ -1039,7 +1040,7 @@ def storeBuild(run, name, view):
         return
 
     # build sanity has no server type parameter so infer from os
-    if name == "build_sanity_matrix" and os == "AMZN":
+    if old_name == "build_sanity_matrix" and os == "AMZN2":
         os = "AWS"
 
     duration = int(job["duration"]) or 0
