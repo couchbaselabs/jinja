@@ -625,12 +625,13 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if _os and _comp:
                             doc["os"] = _os
                             doc["component"] = _comp
-                        # replace os with server type if it exists and is not the default
-                        server_type = getAction(params, "name", "server_type")
-                        if server_type and server_type != DEFAULT_SERVER_TYPE:
-                            doc["os"] = server_type
                         if not doc.get("os") or not doc.get("component"):
                             continue
+
+                    # replace os with server type if it exists and is not the default
+                    server_type = getAction(params, "name", "server_type")
+                    if server_type and server_type != DEFAULT_SERVER_TYPE:
+                        doc["os"] = server_type
 
                     doc["servers"] = get_servers(params, url + str(bid))
 
