@@ -13,6 +13,7 @@ MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
 
 SG_FILTERS = ["SYNCGATEWAY", "SYNC-GATEWAY"]
 OPERATOR_PLATFORMS = ["GKE-GKE", "AKS-AKS", "EKS-EKS" , "OC-OC"]
+CAPELLA_PLATFORMS = ["AWS", "GCP", "AZURE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
@@ -112,6 +113,10 @@ SDK_FEATURES = [
 ]
 
 BUILD_FEATURES = ["SANITY-BUILD_SANITY", "UNIX-UNIT", "UNIT-UNIT"]
+
+CAPELLA_FEATURES = ["UI-UI", "SDK-SDK", "TESTRUNNER-FUNCTIIONAL",
+                    "VOLUME-VOLUME"]
+
 
 ## ---  VIEWS --- ##
 SERVER_VIEW = {"urls": ["http://qa.sc.couchbase.com",
@@ -226,10 +231,16 @@ OPERATOR_VIEW = {"urls": ["http://qa.sc.couchbase.com/view/Cloud"],
                  "bucket": "operator"
                  }
 
+CAPELLA_VIEW = { "urls": ["http://qa.sc.couchbase.com/view/Capella"],
+                 "platforms": CAPELLA_PLATFORMS,
+                 "features": CAPELLA_FEATURES,
+                 "build_param_name": ["build"],
+                 "bucket": "capella"}
+
 VIEWS = [SERVER_VIEW, SERVER_VIEW_2, BUILD_VIEW, SG_VIEW,
          CBLITE_CLIB_VIEW,
          CBLITE_DOTNET_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW,
-         CBLITE_IOS_VIEW, OPERATOR_VIEW]
+         CBLITE_IOS_VIEW, OPERATOR_VIEW, CAPELLA_VIEW]
 
 
 BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",

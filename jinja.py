@@ -996,6 +996,189 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
     except Exception as ex:
         print("Some unintented exception occured : %s" % ex)
 
+
+def storeCapella(input, first_pass=True, lastTotalCount=-1,
+                  claimedBuilds=None):
+    try:
+        jobDoc, view, already_scraped = input
+        bucket = view["bucket"]
+
+        claimedBuilds = claimedBuilds or {}
+        cluster = newClient()
+        client = cluster.bucket(bucket).default_collection()
+        greenboard_bucket = cluster.bucket(
+            "greenboard").default_collection()
+
+        doc = copy.deepcopy(jobDoc)
+        url = doc["url"]
+        res = getJS(url, {"depth": 0})
+
+        if res is None:
+            return
+
+        # do not process disabled jobs
+        if isDisabled(doc):
+            purgeDisabled(res, bucket)
+            return
+        buildHist = {}
+        if res.get("lastBuild") is not None:
+
+            bids = [b["number"] for b in res["builds"]]
+
+            if isExecutor(doc["name"]):
+                # include all jenkins history
+                bids = list(range(res["firstBuild"]["number"],
+                                  res["lastBuild"]["number"] + 1))
+                bids.reverse()
+            elif first_pass:
+                bids.reverse()  # bottom to top 1st pass
+
+            for bid in bids:
+                try:
+                    doc = copy.deepcopy(jobDoc)
+                    oldName = JOBS.get(doc["name"]) is not None
+                    if oldName and bid in JOBS[doc["name"]]:
+                        continue  # job already stored
+                    else:
+                        if oldName and first_pass == False:
+                            JOBS[doc["name"]].append(bid)
+
+                    doc["build_id"] = bid
+                    already_scraped_key = doc["url"] + str(doc["build_id"])
+                    if already_scraped_key in already_scraped:
+                        continue
+                    should_process = False
+
+                    for _ in range(2):
+                        res = getJS(url + str(bid), {"depth": 0})
+                        if not build_finished(res):
+                            break
+                        # retry after 10 seconds if jenkins race condition
+                        # where result and duration have not been updated to
+                        # reflect test results
+                        # e.g. result set to success, test result processed,
+                        # result updated, duration updated.
+                        if res["duration"] == 0:
+                            print("Sleeping for 10 seconds, potential Jenkins " \
+                                  "race condition detected...")
+                            time.sleep(10)
+                        else:
+                            should_process = True
+                            break
+
+                    if not should_process:
+                        continue
+
+                    doc["result"] = res["result"]
+                    doc["duration"] = res["duration"]
+                    doc["timestamp"] = res["timestamp"]
+
+                    actions = res["actions"]
+                    params = getAction(actions, "parameters")
+                    totalCount = getAction(actions, "totalCount") or 0
+                    failCount = getAction(actions, "failCount") or 0
+                    skipCount = getAction(actions, "skipCount") or 0
+                    should_analyse_logs = res["result"] != "SUCCESS"
+                    should_analyse_report = totalCount > 0 and res[
+                        "result"] != "SUCCESS"
+                    doc["claim"] = getClaimReason(actions,
+                                                  should_analyse_logs,
+                                                  should_analyse_report,
+                                                  url + str(bid))
+                    if totalCount == 0:
+                        if not isExecutor(doc["name"]):
+                            # skip non executor jobs where totalCount == 0
+                            # and no lastTotalCount
+                            if lastTotalCount == -1:
+                                continue
+                            else:
+                                # only set totalCount to lastTotalCount if
+                                # this is not an executor job
+                                # if this is an executor job, the last run
+                                # will probably be a completely
+                                # different set of tests so lastTotalCount is
+                                # irrelevant
+                                totalCount = lastTotalCount
+                                failCount = totalCount
+                    else:
+                        lastTotalCount = totalCount
+
+                    doc["failCount"] = failCount
+                    doc["totalCount"] = totalCount - skipCount
+                    doc["skipCount"] = 0
+                    os, component = getOsComponent(doc["name"], view)
+                    doc["component"] = component
+                    doc["os"] = getCapellaPlatform(doc["name"], view)
+                    if not doc['component']:
+                        continue
+                    doc['build'], doc['priority'] = \
+                        getBuildAndPriority(params, view['build_param_name'])
+                    if not doc.get("build"):
+                        continue
+
+                    doc["servers"] = []
+
+                    doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
+                    update_skip_count(greenboard_bucket, view, doc)
+
+                    histKey = doc["name"] + "-" + doc["build"]
+                    if not first_pass and histKey in buildHist:
+
+                        # print "REJECTED- doc already in build results: %s"
+                        # % doc
+                        # print buildHist
+
+                        # attempt to delete if this record has been stored in
+                        # couchbase
+
+                        try:
+                            oldKey = "%s-%s" % (doc["name"], doc["build_id"])
+                            oldKey = hashlib.md5(oldKey.encode()).hexdigest()
+                            client.remove(oldKey)
+                            # print "DELETED- %d:%s" % (bid, histKey)
+                        except:
+                            pass
+
+                        continue  # already have this build results
+
+                    key = "%s-%s" % (doc["name"], doc["build_id"])
+                    key = hashlib.md5(key.encode()).hexdigest()
+
+                    try:  # get custom claim if exists
+                        oldDoc = client.get(key)
+                        customClaim = oldDoc.value.get('customClaim')
+                    #  if customClaim is not None:
+                    #      doc["customClaim"] = customClaim
+                    except:
+                        pass  # ok, this is new doc
+                    retries = 5
+                    while retries > 0:
+                        try:
+                            client.upsert(key, doc)
+                            buildHist[histKey] = doc["build_id"]
+                            already_scraped.append(already_scraped_key)
+                            print("Collected %s" % already_scraped_key)
+                            break
+                        except Exception as e:
+                            print("set failed, couchbase down?: %s" % (HOST))
+                            print(e)
+                            retries -= 1
+                    if retries == 0:
+                        with open("errors.txt", 'a+') as error_file:
+                            error_file.writelines(doc.__str__())
+                    if doc.get("claimedBuilds"):  # rm custom claim
+                        del doc["claimedBuilds"]
+                except Exception as ex:
+                    print("Some unintented exception occured : %s" % ex)
+        if first_pass:
+            storeCapella((jobDoc, view, already_scraped),
+                          first_pass=False,
+                          lastTotalCount=lastTotalCount,
+                          claimedBuilds=claimedBuilds)
+    except Exception as ex:
+        print("Some unintented exception occured : %s" % ex)
+
+
 def storeBuild(run, name, view):
     cluster = newClient()
     client = cluster.bucket("server").default_collection() # using server bucket (for now)
@@ -1196,6 +1379,11 @@ def getOperatorPlatform(name, view):
             break
     return _platform
 
+def getCapellaPlatform(name, view):
+    # Add logic to get the actual platform from the job later once it's
+    # implemented.
+    return "AWS"
+
 
 def pollTest(view, already_scraped):
     tJobs = []
@@ -1292,6 +1480,36 @@ def polloperator(view, already_scraped):
             tJobs.append((doc, view, already_scraped))
     pool = multiprocessing.Pool()
     pool.map(storeOperator, tJobs)
+    pool.close()
+    pool.join()
+
+
+def pollcapella(view, already_scraped):
+    tJobs = []
+
+    for url in view["urls"]:
+        j = getJS(url, {"depth": 0, "tree": "jobs[name,url,color]"})
+        if j is None or j.get('jobs') is None:
+            continue
+
+        for job in j["jobs"]:
+            if is_excluded(view, job):
+                print("skipping {} (excluded)".format(job["name"]))
+                continue
+            doc = {}
+            doc["name"] = job["name"]
+            if job["name"] in JOBS:
+                continue
+            JOBS[job["name"]] = []
+            platform = getCapellaPlatform(job["name"], view)
+            if not platform:
+                continue
+            doc['os'] = platform
+            doc["url"] = job["url"]
+            doc["color"] = job.get("color")
+            tJobs.append((doc, view, already_scraped))
+    pool = multiprocessing.Pool()
+    pool.map(storeCapella, tJobs)
     pool.close()
     pool.join()
 
@@ -1441,6 +1659,8 @@ if __name__ == "__main__":
                     pollBuild(view)
                 elif view["bucket"] == "operator":
                     polloperator(view, already_scraped[view["bucket"]])
+                elif view["bucket"] == "capella":
+                    pollcapella(view, already_scraped[view["bucket"]])
                 else:
                     pollTest(view, already_scraped[view["bucket"]])
         except Exception as ex:
