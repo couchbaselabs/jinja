@@ -17,6 +17,10 @@ CAPELLA_PLATFORMS = ["AWS", "GCP", "AZURE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "THROTTLING-THROTTLING",
+    "METERING-METERING",
+    "TENANT_MGMT-TENANT_MGMT",
+    "TENANT_MANAGEMENT-TENANT_MGMT",
     "E2E-E2E",
     "MAGMA-MAGMA",
     "COUCHSTORE-COUCHSTORE",
@@ -114,8 +118,15 @@ SDK_FEATURES = [
 
 BUILD_FEATURES = ["SANITY-BUILD_SANITY", "UNIX-UNIT", "UNIT-UNIT"]
 
-CAPELLA_FEATURES = ["UI-UI", "SDK-SDK", "TESTRUNNER-FUNCTIIONAL",
-                    "VOLUME-VOLUME", "CHAOS-CHAOS"]
+CAPELLA_FEATURES = ["UI-UI",
+                    "SDK-SDK",
+                    "TESTRUNNER-FUNCTIONAL",
+                    "VOLUME-VOLUME",
+                    "CHAOS-CHAOS",
+                    "THROTTLING-FUNCTIONAL",
+                    "METERING-FUNCTIONAL",
+                    "TENANT_MGMT-FUNCTIONAL",
+                    "TENANT_MANAGEMENT-FUNCTIONAL"]
 
 
 ## ---  VIEWS --- ##
