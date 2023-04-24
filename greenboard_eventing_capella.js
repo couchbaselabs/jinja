@@ -76,6 +76,12 @@ function OnUpdate(doc,meta) {
                 "disabled": false,
                 "displayName": displayName
             }
+            if (doc.hasOwnProperty('provider')){
+                build_to_store['provider'] = doc['provider']
+            }
+            if (doc.hasOwnProperty('env')) {
+                build_to_store['env'] = doc['env']
+            }
             if (doc.hasOwnProperty("skipCount")) {
                 build_to_store["skipCount"] = doc["skipCount"]
             }
