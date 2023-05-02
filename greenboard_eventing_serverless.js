@@ -89,6 +89,9 @@ function OnUpdate(doc, meta) {
         if (doc.hasOwnProperty('env')) {
             build_to_store['env'] = doc['env']
         }
+        if (doc.hasOwnProperty('cp_version')) {
+            build_to_store['cp_version'] = doc['cp_version']
+        }
         if (doc.hasOwnProperty("skipCount")) {
             build_to_store["skipCount"] = doc["skipCount"]
         }

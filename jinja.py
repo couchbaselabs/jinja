@@ -521,6 +521,49 @@ def get_env(params, envs):
     return env
 
 
+def get_control_plane_version(doc):
+    """
+    fetches the control plane version for a job from couchbase-cloud repo based on the env and timestamp
+    both env and timestamp can be fetched from the PARAM - doc.
+    (that is why this HAS TO BE called after `get_env` function for a job)
+    """
+    ISO_time = datetime.fromtimestamp(int(doc["timestamp"]) / 1000).isoformat()
+    GIT_USER, GIT_TOKEN = get_git_credentials('https://github.com/couchbasecloud/couchbase-cloud/')
+    file = "versions-" + doc['env'].lower() + ".env"
+    if doc['env'] == "SBX":
+        file = "versions-pre_dev.env"
+
+    res = requests.get(
+        'https://api.github.com/repos/couchbasecloud/couchbase-cloud/commits?'
+        'path=/' + file + '&until=' + ISO_time,
+        auth=(GIT_USER, GIT_TOKEN)
+    )
+    if res.status_code != 200:
+        return None
+    commit = res.json()[0]["sha"]
+
+    res = requests.get(
+        'https://raw.githubusercontent.com/couchbasecloud/couchbase-cloud/' + commit + '/' + file,
+        auth=(GIT_USER, GIT_TOKEN)
+    )
+    for line in res.iter_lines(decode_unicode=True):
+        if "main_commit" not in line:
+            continue
+        if "#" in line:
+            return line.split('#')[-1]
+        elif "$" in line:
+            commit = requests.get(
+                'https://api.github.com/repos/couchbasecloud/couchbase-cloud/commits?'
+                'until=' + ISO_time + '&per_page=1',
+                auth=(GIT_USER, GIT_TOKEN)
+            )
+            if commit.status_code != 200:
+                return None
+            return commit.json()[0]["sha"][:8]
+        else:
+            return line.split('=')[-1]
+
+
 def get_git_credentials(git_url):
     """
     getting git auth credentials from credentials.ini
@@ -585,15 +628,15 @@ def get_params_from_git_release(doc, os_path):
         doc - jobDoc for which these parameters are being fetched for
         os_path - whether the job is related to capella or serverless platform
     """
-    ISOtime = datetime.fromtimestamp(int(doc["timestamp"])/1000).isoformat()
+    ISO_time = datetime.fromtimestamp(int(doc["timestamp"])/1000).isoformat()
     GIT_USER, GIT_TOKEN = get_git_credentials('https://github.com/couchbasecloud/couchbase-cloud/')
     try:
-        release = get_latest_release(ISOtime, os_path)
+        release = get_latest_release(ISO_time, os_path)
         if not release:
             return None
         res = requests.get(
             'https://api.github.com/repos/couchbasecloud/couchbase-cloud/commits?'
-            'path=/internal/' + os_path + '/versions/one.go&until=' + ISOtime,
+            'path=/internal/' + os_path + '/versions/one.go&until=' + ISO_time,
             auth=(GIT_USER, GIT_TOKEN)
         )
         if res.status_code != 200:
@@ -854,6 +897,12 @@ def store_cloud(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     env = get_env(params, view["env-param-name"])
                     if env:
                         doc["env"] = env.upper()
+                    cp_version = get_control_plane_version(doc)
+                    if not cp_version:
+                        print("Error fetching Control Plane version for {0}, SKIPPING JOB".format(doc['name'] + bid))
+                        continue
+                    else:
+                        doc["cp_version"] = cp_version
 
                     doc["build"], doc["priority"] = getBuildAndPriority(params, view["build_param_name"])
                     if not doc.get("build"):
@@ -1156,6 +1205,12 @@ def store_serverless(input, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     env = get_env(params, view["env-param-name"])
                     if env:
                         doc["env"] = env.upper()
+                    cp_version = get_control_plane_version(doc)
+                    if not cp_version:
+                        print("Error fetching Control Plane version for {0}, SKIPPING JOB".format(doc['name'] + bid))
+                        continue
+                    else:
+                        doc["cp_version"] = cp_version
 
                     doc["build"], doc["priority"] = getBuildAndPriority(params, view["build_param_name"])
                     if not doc.get("build"):
