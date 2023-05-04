@@ -27,6 +27,8 @@ DEFAULT_GSI_TYPE = "PLASMA"
 DEFAULT_ARCHITECTURE = "x86_64"
 DEFAULT_SERVER_TYPE = "VM"
 
+ALREADY_SCRAPPED = {}
+
 config = configparser.ConfigParser()
 config.read("credentials.ini")
 
@@ -57,6 +59,12 @@ def getJS(url, params=None, retry=5, append_api_json=True):
             res = requests.get("{0}/{1}".format(url, "api/json"), params=params, timeout=15, auth=auth)
         else:
             res = requests.get("{0}".format(url), params=params, timeout=15, auth=auth)
+        if res.status_code == 404:
+            print("404 Error for URL: %s" % res.url)
+            return None
+        elif res.status_code != 200:
+            print("[Error] url unreachable: %s" % res.url)
+            return None
         data = res.json()
         return data
     except Exception as e:
@@ -176,7 +184,7 @@ def processBuildValue(build):
             return None
 
         build = "%s-%s" % (rel, bno.zfill(4))
-    except:
+    except (Exception,):
         print("unsupported version_number: " + build)
         return None
 
@@ -185,7 +193,7 @@ def processBuildValue(build):
 
 def format_stack_trace(raw_stack_trace, character_limit=1000):
     # remove non ASCII characters
-    stack = re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last):  ")
+    stack = re.sub(r'[^ -~]+', '', raw_stack_trace.replace("\\n", "")).lstrip("['Traceback (most recent call last): ")
     return (stack[:character_limit] + '...') if len(stack) > character_limit else stack
 
 
@@ -203,13 +211,13 @@ def get_servers_from_log(job_url):
             if "thread installer-thread-" in line:
                 try:
                     ips.add(line.replace("thread installer-thread-", "").replace(" finished", "").strip())
-                except Exception:
+                except (Exception,):
                     pass
             # new_install.py
             if "INSTALL COMPLETED ON" in line or "INSTALL NOT STARTED ON" in line or "INSTALL FAILED ON" in line:
                 try:
                     ips.add(line.split(" ")[-1].strip())
-                except Exception:
+                except (Exception,):
                     pass
     except Exception as e:
         print("error downloading console for job: ({0}), Error: {1}".format(job_url, e))
@@ -289,12 +297,14 @@ def getClaimReason(actions, analyse_log, analyse_test_report, job_url):
     if getAction(actions, "claimed"):
         reason = getAction(actions, "reason")
         try:
-            rep_dict = {m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".
-            format(m, m) for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)}
+            rep_dict = {
+                m: "<a href=\"https://issues.couchbase.com/browse/{0}\">{1}</a>".format(m, m)
+                for m in re.findall(r"([A-Z]{2,4}[-: ]*\d{4,5})", reason)
+            }
             if rep_dict:
                 pattern = re.compile('|'.join(rep_dict.keys()))
                 reason = pattern.sub(lambda x: rep_dict[x.group()], reason)
-        except Exception as e:
+        except (Exception,):
             pass
     elif analyse_log:
         if analyse_test_report:
@@ -320,7 +330,7 @@ def caveat_should_skip_win(doc):
     comp = doc["component"]
     build = doc["build"]
     if build >= "4.1.0" and os == "WIN" and \
-            (comp == "VIEW" or comp == "TUNABLE" or comp == "2I" or \
+            (comp == "VIEW" or comp == "TUNABLE" or comp == "2I" or
              comp == "NSERV" or comp == "VIEW" or comp == "EP"):
         if doc["name"].lower().find("w01") == 0:
             skip = True
@@ -384,7 +394,7 @@ def purgeDisabled(job, bucket):
         # purge
         try:
             client.remove(oldKey)
-        except Exception as ex:
+        except (Exception,):
             pass  # delete ok
 
 
@@ -394,7 +404,7 @@ def get_expected_total_count(greenboard_bucket, bucket, doc):
     try:
         expected_total_count = int(greenboard_bucket.lookup_in("existing_builds_" + bucket, SD.get(
             bucket + "." + doc["os"] + "." + doc["component"] + "." + name + ".totalCount"))[0])
-    except Exception:
+    except (Exception,):
         pass
     return expected_total_count
 
@@ -423,7 +433,7 @@ def get_manual_triage_and_bugs(triage_history_bucket, bucket, doc):
             if build >= triage_history["build"]:
                 triage = triage_history["triage"]
                 bugs = triage_history["bugs"]
-        except Exception:
+        except (Exception,):
             pass
 
     return triage, bugs
@@ -458,10 +468,9 @@ def get_variants(params, component):
     """
     Get the variants from the params, or defaults where applicable
     """
-    variants = {}
 
     # Bucket storage applies to all jobs
-    variants["bucket_storage"] = get_variant("bucket_storage", params) or DEFAULT_BUCKET_STORAGE
+    variants = {"bucket_storage": get_variant("bucket_storage", params) or DEFAULT_BUCKET_STORAGE}
 
     # GSI type only applies to jobs that use GSI
     gsi_type = get_variant("gsi_type", params)
@@ -974,6 +983,9 @@ def store_cloud(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
                             already_scraped.append(already_scraped_key)
+                            if "server" not in ALREADY_SCRAPPED:
+                                ALREADY_SCRAPPED['server'] = manager.list()
+                            ALREADY_SCRAPPED['server'].append(already_scraped_key)
                             break
                         except Exception as e:
                             print("set failed, couchbase down?: %s" % HOST)
@@ -1283,6 +1295,9 @@ def store_serverless(input, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
                             already_scraped.append(already_scraped_key)
+                            if "server" not in ALREADY_SCRAPPED:
+                                ALREADY_SCRAPPED['server'] = manager.list()
+                            ALREADY_SCRAPPED['server'].append(already_scraped_key)
                             break
                         except Exception as e:
                             print("set failed, couchbase down?: %s" % HOST)
@@ -1297,7 +1312,7 @@ def store_serverless(input, first_pass=True, lastTotalCount=-1, claimedBuilds=No
                     print("Some unintended exception occurred in bid {1}: {0}".format(e, bid))
         if first_pass:
             store_serverless((jobDoc, view, already_scraped), first_pass=False,
-                        lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
+                             lastTotalCount=lastTotalCount, claimedBuilds=claimedBuilds)
     except Exception as e:
         print("Some unintended exception occurred : {0}".format(e))
 
@@ -1362,7 +1377,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     if oldName and bid in JOBS[doc["name"]]:
                         continue  # job already stored
                     else:
-                        if oldName and first_pass == False:
+                        if oldName and first_pass is False:
                             JOBS[doc["name"]].append(bid)
 
                     doc["build_id"] = bid
@@ -1378,7 +1393,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         res = getJS(url + str(bid), {"depth": 0})
                         if not build_finished(res):
                             break
-                        # retry after 10 seconds if jenkins race condition where result and duration have not been updated to reflect test results
+                        # retry after 10 seconds if jenkins race condition where result and
+                        # duration have not been updated to reflect test results.
                         # e.g. result set to success, test result processed, result updated, duration updated.
                         if res["duration"] == 0:
                             print("Sleeping for 10 seconds, potential Jenkins race condition detected...")
@@ -1428,11 +1444,11 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     doc["skipCount"] = 0
                     if params is None:
                         # possibly new api
-                        if not 'keys' in dir(actions) and len(actions) > 0:
+                        if 'keys' not in dir(actions) and len(actions) > 0:
                             # actions is not a dict and has data
                             # then use the first object that is a list
                             for a in actions:
-                                if not 'keys' in dir(a):
+                                if 'keys' not in dir(a):
                                     params = a
 
                     componentParam = getAction(params, "name", "component")
@@ -1551,7 +1567,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report,
                                                       url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
-                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket, view["bucket"],
+                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket,
+                                                                                view["bucket"],
                                                                                 doc)
 
                         histKey = doc["name"] + "-" + doc["build"] + doc["os"]
@@ -1575,7 +1592,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                 buildHist[histKey] = doc["build_id"]
                                 break
                             except Exception as e:
-                                print("set failed, couchbase down?: %s" % (HOST))
+                                print("set failed, couchbase down?: %s" % HOST)
                                 print(e)
                                 retries -= 1
                         if retries == 0:
@@ -1592,7 +1609,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report,
                                                       url + str(bid))
                         update_skip_count(greenboard_bucket, view, doc)
-                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket, view["bucket"],
+                        doc["triage"], doc["bugs"] = get_manual_triage_and_bugs(triage_history_bucket,
+                                                                                view["bucket"],
                                                                                 doc)
 
                         histKey = doc["name"] + "-" + doc["build"]
@@ -1631,7 +1649,7 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                                 already_scraped.append(already_scraped_key)
                                 break
                             except Exception as e:
-                                print("set failed, couchbase down?: %s" % (HOST))
+                                print("set failed, couchbase down?: %s" % HOST)
                                 print(e)
                                 retries -= 1
                         if retries == 0:
@@ -1640,16 +1658,15 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         if doc.get("claimedBuilds"):  # rm custom claim
                             del doc["claimedBuilds"]
                 except Exception as ex:
-                    print("Some unintented exception occured : %s" % ex)
+                    print("Some unintended exception occurred : %s" % ex)
         if first_pass:
             storeTest((jobDoc, view, already_scraped), first_pass=False, lastTotalCount=lastTotalCount,
                       claimedBuilds=claimedBuilds)
     except Exception as ex:
-        print("Some unintented exception occured : %s" % ex)
+        print("Some unintended exception occurred : %s" % ex)
 
 
-def storeOperator(input, first_pass=True, lastTotalCount=-1,
-                  claimedBuilds=None):
+def storeOperator(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
     try:
         jobDoc, view, already_scraped = input
         bucket = view["bucket"]
@@ -1657,7 +1674,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
         claimedBuilds = claimedBuilds or {}
         cluster = newClient()
         client = cluster.bucket(bucket).default_collection()
-        greenboard_bucket = client.bucket("greenboard").default_collection()
+        greenboard_bucket = cluster.bucket("greenboard").default_collection()
 
         doc = copy.deepcopy(jobDoc)
         url = doc["url"]
@@ -1709,8 +1726,7 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                         # e.g. result set to success, test result processed,
                         # result updated, duration updated.
                         if res["duration"] == 0:
-                            print("Sleeping for 10 seconds, potential Jenkins " \
-                                  "race condition detected...")
+                            print("Sleeping for 10 seconds, potential Jenkins race condition detected...")
                             time.sleep(10)
                         else:
                             should_process = True
@@ -1819,10 +1835,13 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                             client.upsert(key, doc)
                             buildHist[histKey] = doc["build_id"]
                             already_scraped.append(already_scraped_key)
+                            if "server" not in ALREADY_SCRAPPED:
+                                ALREADY_SCRAPPED['server'] = manager.list()
+                            ALREADY_SCRAPPED['server'].append(already_scraped_key)
                             print("Collected %s" % already_scraped_key)
                             break
                         except Exception as e:
-                            print("set failed, couchbase down?: %s" % (HOST))
+                            print("set failed, couchbase down?: %s" % HOST)
                             print(e)
                             retries -= 1
                     if retries == 0:
@@ -1831,14 +1850,14 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1,
                     if doc.get("claimedBuilds"):  # rm custom claim
                         del doc["claimedBuilds"]
                 except Exception as ex:
-                    print("Some unintented exception occured : %s" % ex)
+                    print("Some unintended exception occurred : %s" % ex)
         if first_pass:
             storeOperator((jobDoc, view, already_scraped),
                           first_pass=False,
                           lastTotalCount=lastTotalCount,
                           claimedBuilds=claimedBuilds)
     except Exception as ex:
-        print("Some unintented exception occured : %s" % ex)
+        print("Some unintended exception occurred : %s" % ex)
 
 
 def storeBuild(run, name, view):
@@ -1937,7 +1956,7 @@ def storeBuild(run, name, view):
                 client.upsert(key, doc)
             break
         except Exception as e:
-            print("set failed, couchbase down?: %s" % (HOST))
+            print("set failed, couchbase down?: %s" % HOST)
             print(e)
             retries -= 1
     if retries == 0:
@@ -2061,8 +2080,7 @@ def pollTest(view, already_scraped):
                 print("skipping {} (excluded)".format(job["name"]))
                 continue
 
-            doc = {}
-            doc["name"] = job["name"]
+            doc = {"name": job["name"]}
             if job["name"] in JOBS:
                 continue
 
@@ -2107,7 +2125,7 @@ def pollTest(view, already_scraped):
 
 
 def is_excluded(view, job):
-    if "exclude" in view:
+    if "exclude" not in view:
         for name in view["exclude"]:
             if re.search(name, job["name"]) is not None:
                 return True
@@ -2128,8 +2146,7 @@ def polloperator(view, already_scraped):
                 print("skipping {} (excluded)".format(job["name"]))
                 continue
 
-            doc = {}
-            doc["name"] = job["name"]
+            doc = {"name": job["name"]}
             if job["name"] in JOBS:
                 continue
             JOBS[job["name"]] = []
@@ -2250,17 +2267,14 @@ def processOperatorKubernetesVersion(kubernetesVersion):
 
 
 def convert_changeset_to_old_format(new_doc, timestamp):
-    old_format = {}
-    old_format['timestamp'] = timestamp
-    old_format['changeSet'] = {}
+    old_format = {'timestamp': timestamp, 'changeSet': {}}
     old_format_items = []
     for change in new_doc['log']:
         item = {}
         msg = change['message']
         # to remove the multiple '\n's, now appearing in the comment
         # that mess with greenboard's display of reviewUrl
-        item['msg'] = msg[:msg.index('Change-Id')].replace("\n", " ") + \
-                      msg[msg.index('Change-Id') - 1:]
+        item['msg'] = msg[:msg.index('Change-Id')].replace("\n", " ") + msg[msg.index('Change-Id') - 1:]
         old_format_items.append(item)
     old_format['changeSet']['items'] = old_format_items
     return old_format
@@ -2296,9 +2310,8 @@ def collectBuildInfo(url):
             if version[:3] == "0.0":
                 continue
             if float(version[:3]) > 4.6:
-                changeset_url = CHANGE_LOG_URL + "?ver={0}&from={1}" \
-                                                 "&to={2}".format(
-                    version, str(int(build_no) - 1), build_no)
+                changeset_url = CHANGE_LOG_URL + "?ver={0}&from={1}&to={2}".\
+                    format(version, str(int(build_no) - 1), build_no)
                 job = getJS(changeset_url, append_api_json=False)
                 key = version + "-" + build_no[1:].zfill(4)
                 job = convert_changeset_to_old_format(job, timestamp)
@@ -2307,7 +2320,7 @@ def collectBuildInfo(url):
                     client.upsert(key, job)
                     break
                 except Exception as e:
-                    print("set failed, couchbase down?: %s" % (HOST))
+                    print("set failed, couchbase down?: %s" % HOST)
                     print(e)
                     retries -= 1
             if retries == 0:
@@ -2322,12 +2335,31 @@ def collectAllBuildInfo():
             for url in BUILDER_URLS:
                 collectBuildInfo(url)
         except Exception as ex:
-            print("exception occurred during build collection: %s" % (ex))
+            print("exception occurred during build collection: %s" % ex)
 
 
 def newClient(password="password"):
     cluster = Cluster("couchbase://" + HOST, ClusterOptions(PasswordAuthenticator("Administrator", password)))
     return cluster
+
+
+def add_exclusion_for_view(url_list, exclusion_view):
+    """
+    Expands the `exclude` key in a VIEW, by adding the regex for the jobs that are needed to be excluded,
+    IMP => Accepts a view's URL not a job's url
+    PARAMS :
+        url_list - the list of urls to the Views. The jobs in each of those Views would be added for exclusion.
+        exclusion_view - The view for which the regexes need to be added in the `exclude` list.
+    """
+    for url in url_list:
+        res = getJS(url, {"depth": 0, "tree": "jobs[name,url,color]"})
+        if res is None or res['jobs'] is None:
+            continue
+
+        for job in res['jobs']:
+            if job['name'] in exclusion_view:
+                continue
+            exclusion_view['exclude'].append(job['name'])
 
 
 if __name__ == "__main__":
@@ -2338,25 +2370,25 @@ if __name__ == "__main__":
     tBuild.start()
 
     manager = multiprocessing.Manager()
-    already_scraped = {}
 
     while True:
         try:
+            exclude_urls_for_server = CAPELLA_VIEW['urls'] + SERVERLESS_VIEW['urls']
+            add_exclusion_for_view(exclude_urls_for_server, SERVER_VIEW)
             for view in VIEWS:
                 JOBS = {}
-                if view["bucket"] not in already_scraped:
-                    already_scraped[view["bucket"]] = manager.list()
+                if view["bucket"] not in ALREADY_SCRAPPED:
+                    ALREADY_SCRAPPED[view["bucket"]] = manager.list()
                 if view["bucket"] == "build":
                     pollBuild(view)
                 elif view["bucket"] == "operator":
-                    polloperator(view, already_scraped[view["bucket"]])
+                    polloperator(view, ALREADY_SCRAPPED[view["bucket"]])
                 elif view["bucket"] == "capella":
-                    pollcapella(view, already_scraped[view["bucket"]])
+                    pollcapella(view, ALREADY_SCRAPPED[view["bucket"]])
                 elif view["bucket"] == "serverless":
-                    pool_serverless(view, already_scraped[view["bucket"]])
+                    pool_serverless(view, ALREADY_SCRAPPED[view["bucket"]])
                 else:
-                    pollTest(view, already_scraped[view["bucket"]])
+                    pollTest(view, ALREADY_SCRAPPED[view["bucket"]])
         except Exception as ex:
-            print("exception occurred during job collection: %s" % (ex))
+            print("exception occurred during job collection: %s" % ex)
         time.sleep(120)
-
