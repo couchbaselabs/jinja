@@ -6,7 +6,7 @@ UBER_PASS = os.environ.get('UBER_PASS') or ""
 ## --- PLATFORMS --- ##
 SERVER_PLATFORMS = ["UBUNTU", "CENTOS", "DEBIAN", "WIN",
                     "MAC", "SUSE",
-                    "OEL", "DOCKER", "RHEL", "AMZN2"]
+                    "OEL", "DOCKER", "RHEL", "AMZN2", "CLOUD"]
 SG_PLATFORMS = ["CEN7", "CEN006", "WINDOWS", "MACOSX", "CENTOS"]
 SDK_PLATFORMS = [".NET", "JAVA", "LIBC", "NODE"]
 MOBILE_VERSION = ["1.1.0", "1.2.0", "1.3", "1.4"]
@@ -17,15 +17,14 @@ CAPELLA_PLATFORMS = ["AWS", "GCP", "AZURE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "BHIVE-BHIVE",
+    "COLUMNAR-COLUMNAR",
     "THROTTLING-THROTTLING",
     "METERING-METERING",
     "TENANT_MGMT-TENANT_MGMT",
     "TENANT_MANAGEMENT-TENANT_MGMT",
     "E2E-E2E",
-    "MAGMA-MAGMA",
-    "COUCHSTORE-COUCHSTORE",
     "CE_ONLY-CE_ONLY",
-    "COLLECTIONS-COLLECTIONS",
     "DURABILITY-DURABILITY",
     "ATOMICITY-ATOMICITY",
     "COMPRESSION-COMPRESSION",
@@ -70,10 +69,7 @@ SERVER_FEATURES = [
     "LWW-GOXDCR",
     "FOREST-FORESTDB",
     "XDCR-XDCR",
-    "REB-NSERV",
-    "PAUSE-NSERV",
-    "BACK-BACKUP_RECOVERY",
-    "RECOV-BACKUP_RECOVERY",
+    "BACKUP_RECOVERY-BACKUP_RECOVERY",
     "BKRS-BACKUP_RECOVERY",
     "UPGRADE-UPGRADE",
     "UPGRA-UPGRADE",
@@ -83,15 +79,23 @@ SERVER_FEATURES = [
     "TOOLS-TOOLS",
     "IBR-TOOLS",
     "CONNECTION-TOOLS",
+    "MAGMA-MAGMA",
+    "COLLECTIONS-COLLECTIONS",
     "SANITY-SANITY",
     "SANIT-SANITY",
     "SMOKE-SANITY",
+    "COUCHSTORE-COUCHSTORE",
     "DCP-EP",
-    "FAILOVER-NSERV",
     "UNIT-UNIT", "MEMDB-2I",
     "SANIT-BUILD_SANITY",
     "CBOP-OPERATOR",
-    "NUTSHELL-NUTSHELL"
+    "NUTSHELL-NUTSHELL",
+    "BACK-BACKUP_RECOVERY",
+    "RECOV-BACKUP_RECOVERY",
+    "REB-NSERV",
+    "PAUSE-NSERV",
+    "FAILOVER-NSERV",
+    "GSI-2I_REBALANCE"
 ]
 
 LITE_FEATURES = ["P2P-P2P",
@@ -290,7 +294,7 @@ SERVERLESS_FEATURES = [
 
 ## ---  VIEWS --- ##
 CAPELLA_VIEW = {
-    "urls": ["http://qe-jenkins.sc.couchbase.com/view/Cloud/", "http://qa.sc.couchbase.com/view/Capella"],
+    "urls": ["http://qe-jenkins1.sc.couchbase.com/view/Cloud/", "http://qa.sc.couchbase.com/view/Capella"],
     "platforms": CAPELLA_PLATFORMS,
     "features": CAPELLA_FEATURES,
     "build_param_name": ["version_number", "cluster_version", "build", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
@@ -302,7 +306,7 @@ CAPELLA_VIEW = {
 }
 
 SERVERLESS_VIEW = {
-    "urls": ["http://qe-jenkins.sc.couchbase.com/view/Cloud/"],
+    "urls": ["http://qe-jenkins1.sc.couchbase.com/view/Cloud/"],
     "platforms": ["SERVERLESS"],
     "features": SERVERLESS_FEATURES,
     "build_param_name": ["version_number", "cluster_version", "build", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
@@ -334,12 +338,12 @@ SERVER_VIEW = {
     ],
     "platforms": SERVER_PLATFORMS,
     "features": SERVER_FEATURES,
-    "build_param_name": ["version_number", "cluster_version", "build", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
+    "build_param_name": ["version_number", "cluster_version", "build", "cbs_ver", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
     "bucket": "server",
     "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]
 }
 
-SERVER_VIEW_2 = {"urls" : ["http://qe-jenkins.sc.couchbase.com"],
+SERVER_VIEW_2 = {"urls" : ["http://qe-jenkins1.sc.couchbase.com"],
                  "platforms": SERVER_PLATFORMS,
                  "features": SERVER_FEATURES,
                  "build_param_name": ["version_number",
@@ -354,7 +358,7 @@ SG_VIEW = {"urls": ["http://uberjenkins.sc.couchbase.com:8080/"],
            "platforms": SG_PLATFORMS,
            "filters": SG_FILTERS,
            "features": SG_FEATURES,
-           "build_param_name": ["SYNC_GATEWAY_VERSION",
+           "build_param_name": ["SYNC_GATEWAY_VERSION","sgw_ver",
                                 "SYNC_GATEWAY_VERSION_OR_COMMIT"],
            "bucket": "sync_gateway"}
 
@@ -363,7 +367,7 @@ CBLITE_JAVA_VIEW = {
     "platforms": ["JAVA"],
     "features": LITE_FEATURES,
     "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
-                         "LITE_JAVA_VERSION", "LITE_JAVAWS_VERSION"],
+                         "LITE_JAVA_VERSION", "LITE_JAVAWS_VERSION", "lite_java"],
     "additional_fields": {
         "secondary_os": [["CENTOS-7", "CENTOS 7"], ["CENTOS-6", "CENTOS 6"],
                          ["CENTOS7", "CENTOS 7"], ["CENTOS6", "CENTOS 6"],
@@ -381,7 +385,7 @@ CBLITE_ANDROID_VIEW = {
     "platforms": ["ANDROID"],
     "features": LITE_FEATURES,
     "build_param_name": ["UPGRADED_CBLITE_VERSION", "COUCHBASE_MOBILE_VERSION",
-                         "LITE_ANDROID_VERSION"],
+                         "LITE_ANDROID_VERSION", "a_ver"],
     "none_filters": ["DOTNET", "XAMARIN"],
     "bucket": "cblite"
 }
@@ -430,7 +434,7 @@ CBLITE_CLIB_VIEW = {
 }
 
 
-BUILD_VIEW = {"urls": ["http://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
+BUILD_VIEW = {"urls": ["https://server.jenkins.couchbase.com/job/build_sanity_matrix/", "http://cv.jenkins.couchbase.com/view/scheduled-unit-tests/job/unit-simple-test/", "http://server.jenkins.couchbase.com/job/watson-unix/"],
               "platforms": SERVER_PLATFORMS,
               "features": BUILD_FEATURES,
               "bucket": "build"}
@@ -443,12 +447,12 @@ OPERATOR_VIEW = {"urls": ["http://qa.sc.couchbase.com/view/Cloud"],
                  }
 
 
-VIEWS = [SERVERLESS_VIEW, CAPELLA_VIEW, SERVER_VIEW, SERVER_VIEW_2, BUILD_VIEW, SG_VIEW, CBLITE_CLIB_VIEW,
+VIEWS = [SERVER_VIEW_2, SERVER_VIEW, BUILD_VIEW, SG_VIEW, CBLITE_CLIB_VIEW,
          CBLITE_DOTNET_VIEW, CBLITE_JAVA_VIEW, CBLITE_ANDROID_VIEW, CBLITE_IOS_VIEW, OPERATOR_VIEW]
 
 
-BUILDER_URLS = ["http://server.jenkins.couchbase.com/job/couchbase-server-build/",
-                "http://server.jenkins.couchbase.com/job/watson-build/"]
+BUILDER_URLS = ["https://server.jenkins.couchbase.com/job/couchbase-server-build/",
+                "https://server.jenkins.couchbase.com/job/watson-build/"]
 
 CHANGE_LOG_URL = "http://172.23.123.43:8282/changelog"
 
