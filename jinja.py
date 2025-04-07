@@ -12,7 +12,9 @@ from datetime import datetime
 from threading import Thread
 from requests.auth import HTTPBasicAuth
 
-from couchbase.cluster import Cluster, ClusterOptions, PasswordAuthenticator
+from couchbase.cluster import Cluster
+from couchbase.options import ClusterOptions
+from couchbase.auth import PasswordAuthenticator
 import couchbase.subdocument as SD
 
 from constants import *
