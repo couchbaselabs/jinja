@@ -2127,7 +2127,7 @@ def pollTest(view, already_scraped):
 
 
 def is_excluded(view, job):
-    if "exclude" not in view:
+    if "exclude" in view:
         for name in view["exclude"]:
             if re.search(name, job["name"]) is not None:
                 return True
