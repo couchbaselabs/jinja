@@ -17,6 +17,7 @@ CAPELLA_PLATFORMS = ["AWS", "GCP", "AZURE"]
 
 ## --- FEATURES --- ##
 SERVER_FEATURES = [
+    "AIQG-AIQG",
     "BHIVE-BHIVE",
     "COLUMNAR-COLUMNAR",
     "THROTTLING-THROTTLING",
@@ -209,89 +210,6 @@ CAPELLA_FEATURES = [
     "NUTSHELL-NUTSHELL"
 ]
 
-SERVERLESS_FEATURES = [
-    "CAPELLA_VOLUME-VOLUME",
-    "CP_CLI_RUNNER-CP_CLI",
-    "DAPI_SANITY-DAPI",
-    "NEBULA-DIRECT_NEBULA",
-    "PERF-PERF",
-    "SDK-SDK",
-    "VOLUME-VOLUME",
-    "SYSTEM-SYSTEM_TEST",
-    "UI-UI",
-    "MAGMA-MAGMA",
-    "COUCHSTORE-COUCHSTORE",
-    "CE_ONLY-CE_ONLY",
-    "COLLECTIONS-COLLECTIONS",
-    "DURABILITY-DURABILITY",
-    "ATOMICITY-ATOMICITY",
-    "COMPRESSION-COMPRESSION",
-    "IPV6-IPV6",
-    "LOGREDACTION-LOG_REDACTION",
-    "EVENTING-EVENTING",
-    "RBAC-RBAC",
-    "PLASMA-PLASMA",
-    "IMPORT-IMPORT_EXPORT",
-    "EXPORT-IMPORT_EXPORT",
-    "CONVERG-MOBILE_CONVERGENCE",
-    "ANALYTIC-ANALYTICS",
-    "EPHEM-EPHEMERAL",
-    "AUTOFAILOVER-AUTO_FAILOVER",
-    "FAST-FAST_FAILOVER",
-    "SYSTEST-SYSTEST",
-    "SYSTEM-SYSTEST",
-    "SUBDOC-SUBDOC",
-    "FTS-FTS",
-    "MOBILEUPGRADE-MOBILE_UPGRADE",
-    "EEONLY-EEONLY",
-    "SDK-SDK",
-    "MOBILE-MOBILE",
-    "CERTIFY-OS_CERTIFY",
-    "BREAKPAD-BREAKPAD",
-    "CBSGW-SYNCGW",
-    "SYNC-MOBILE",
-    "RZA-RZA",
-    "GEO-GEO",
-    "EPENG-EP",
-    "SECU-SECURITY",
-    "TUNABLE-TUNABLE",
-    "2I_REBALANCE-2I_REBALANCE",
-    "2I-2I_MOI",
-    "NSERV-NSERV",
-    "RQG-RQG",
-    "N1QL-QUERY",
-    "TUQ-QUERY",
-    "VIEW-VIEW",
-    "QUERY-QUERY",
-    "GOXDCR-GOXDCR",
-    "LWW-GOXDCR",
-    "FOREST-FORESTDB",
-    "XDCR-XDCR",
-    "REB-NSERV",
-    "PAUSE-NSERV",
-    "BACK-BACKUP_RECOVERY",
-    "RECOV-BACKUP_RECOVERY",
-    "BKRS-BACKUP_RECOVERY",
-    "UPGRADE-UPGRADE",
-    "UPGRA-UPGRADE",
-    "TRANSFER-TOOLS",
-    "CLI-CLI",
-    "_UI-UI",
-    "TOOLS-TOOLS",
-    "IBR-TOOLS",
-    "CONNECTION-TOOLS",
-    "SANITY-SANITY",
-    "SANIT-SANITY",
-    "SMOKE-SANITY",
-    "DCP-EP",
-    "FAILOVER-NSERV",
-    "UNIT-UNIT",
-    "MEMDB-2I",
-    "SANIT-BUILD_SANITY",
-    "CBOP-OPERATOR",
-    "NUTSHELL-NUTSHELL"
-]
-
 ## ---  VIEWS --- ##
 CAPELLA_VIEW = {
     "urls": ["http://qe-jenkins1.sc.couchbase.com/view/Cloud/", "http://qa.sc.couchbase.com/view/Capella"],
@@ -303,19 +221,6 @@ CAPELLA_VIEW = {
                        "public_api_url", "CP_URL", "URL", "url"],
     "bucket": "capella",
     "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"],
-}
-
-SERVERLESS_VIEW = {
-    "urls": ["http://qe-jenkins1.sc.couchbase.com/view/Cloud/"],
-    "platforms": ["SERVERLESS"],
-    "features": SERVERLESS_FEATURES,
-    "build_param_name": ["version_number", "cluster_version", "build", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
-    "image_param_name": ["IMAGE", "image", "image_name", "cbs_image", "cb_image"],
-    "env-param-name": ["CYPRESS_BASE_URL", "Environment", "CP_CLI_APIURL", "capella_api_url", "ENV_URL", "CP_API_URL",
-                       "public_api_url", "CP_URL", "URL", "url"],
-    "bucket": "serverless",
-    "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"],
-    "job": "cloud"
 }
 
 SERVER_VIEW = {
@@ -338,7 +243,7 @@ SERVER_VIEW = {
     ],
     "platforms": SERVER_PLATFORMS,
     "features": SERVER_FEATURES,
-    "build_param_name": ["version_number", "cluster_version", "build", "cbs_ver", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
+    "build_param_name": ["version_number", "columnar_version_number","cluster_version", "build", "cbs_ver", "COUCHBASE_SERVER_VERSION", "CB_VERSION"],
     "bucket": "server",
     "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]
 }
@@ -349,7 +254,8 @@ SERVER_VIEW_2 = {"urls" : ["http://qe-jenkins1.sc.couchbase.com"],
                  "build_param_name": ["version_number",
                                       "cluster_version",
                                       "build",
-                                      "COUCHBASE_SERVER_VERSION"],
+                                      "COUCHBASE_SERVER_VERSION",
+                                      "columnar_version_number"],
                  "bucket": "server",
                  "exclude": ["t[e]?mp(_|-)", "(_|-)t[e]?mp"]
                  }
