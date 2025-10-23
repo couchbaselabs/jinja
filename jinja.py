@@ -202,6 +202,7 @@ def format_stack_trace(raw_stack_trace, character_limit=1000):
 def get_servers_from_log(job_url):
     ips = set()
     try:
+        install_failure = False
         auth = get_auth(job_url)
         timeout = 5
         start_download_time = time.time()
@@ -221,9 +222,12 @@ def get_servers_from_log(job_url):
                     ips.add(line.split(" ")[-1].strip())
                 except (Exception,):
                     pass
+            # install failure check
+            if "INSTALL FAILED ON" in line or "INSTALL NOT STARTED ON" in line:
+                install_failure = True
     except Exception as e:
         print("error downloading console for job: ({0}), Error: {1}".format(job_url, e))
-    return list(ips)
+    return list(ips), install_failure
 
 
 def get_claim_from_log(job_url):
@@ -444,13 +448,20 @@ def get_manual_triage_and_bugs(triage_history_bucket, bucket, doc):
 def get_servers_from_params(params):
     servers = getAction(params, "name", "servers")
     if servers is None:
-        return []
+        return [],False
     else:
-        return [server.strip("\"") for server in servers.split(",")]
+        return [server.strip("\"") for server in servers.split(",")],False
 
 
 def get_servers(params, job_url):
-    return get_servers_from_params(params) or get_servers_from_log(job_url)
+    servers, install_failure = get_servers_from_params(params)
+    if not servers:
+        servers, install_failure = get_servers_from_log(job_url)
+    else:
+        # Even if servers are found in params, still check log for install failures
+        _, log_install_failure = get_servers_from_log(job_url)
+        install_failure = install_failure or log_install_failure
+    return servers, install_failure
 
 
 def get_variant(name, params):
@@ -789,6 +800,11 @@ def store_cloud(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
 
                     if skipServerCollect(params):
                         continue
+
+                    # Check for install failure in console log
+                    doc["servers"], install_failure = get_servers(params, url + str(bid))
+                    if install_failure:
+                        doc["result"] = "INST_FAIL"
 
                     totalCount = getAction(actions, "totalCount") or 0
                     failCount = getAction(actions, "failCount") or 0
@@ -1177,7 +1193,9 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                     if server_type and server_type != DEFAULT_SERVER_TYPE:
                         doc["os"] = server_type
 
-                    doc["servers"] = get_servers(params, url + str(bid))
+                    doc["servers"], install_failure = get_servers(params, url + str(bid))
+                    if install_failure:
+                        doc["result"] = "INST_FAIL"
 
                     if doc["component"] == "P2P":
                         is_cblite_p2p = True
@@ -1196,8 +1214,8 @@ def storeTest(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None):
                         doc["sync_gateway_version"] = getAction(params, "name",
                                                                 "SYNC_GATEWAY_VERSION")
 
-                    if getAction(params, "name","columnar_version_number"):
-                        doc["server_version"] = getAction(params, "name","columnar_version_number")
+                    if getAction(params, "name","columnar_version_number") and getAction(params, "name","columnar_version_number") != "0":
+                        doc["build"] = getAction(params, "name","columnar_version_number")
 
                     if is_syncgateway or is_cblite or is_cblite_p2p:
                         if "server_version" not in doc or doc["server_version"] is None:
@@ -1487,7 +1505,9 @@ def storeOperator(input, first_pass=True, lastTotalCount=-1, claimedBuilds=None)
 
                     doc["name"] = doc["name"] + "_" + doc["server_version"]
 
-                    doc["servers"] = get_servers(params, url + str(bid))
+                    doc["servers"], install_failure = get_servers(params, url + str(bid))
+                    if install_failure:
+                        doc["result"] = "INST_FAIL"
 
                     doc["claim"] = getClaimReason(actions, should_analyse_logs, should_analyse_report, url + str(bid))
                     update_skip_count(greenboard_bucket, view, doc)
@@ -1610,7 +1630,9 @@ def storeBuild(run, name, view):
     should_analyse_logs = result != "SUCCESS"
     should_analyse_report = totalCount > 0 and result != "SUCCESS"
     claim = getClaimReason(actions, should_analyse_logs, should_analyse_report, run["url"] + job["id"])
-    servers = get_servers(params, run["url"] + job["id"])
+    servers, install_failure = get_servers(params, run["url"] + job["id"])
+    if install_failure:
+        result = "INST_FAIL"
 
     # lookup pass count fail count version
     doc = {
